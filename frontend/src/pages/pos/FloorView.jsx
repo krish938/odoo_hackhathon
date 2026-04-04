@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import api from '../../api/axios';
 import usePosStore from '../../store/posStore';
 import useAuthStore from '../../store/authStore';
@@ -11,6 +11,7 @@ import { Coffee, Users, Settings, LogOut, RefreshCw } from 'lucide-react';
 
 const FloorView = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuthStore();
   const { activeSession, clearSession } = usePosStore();
   const [floors, setFloors] = useState([]);
@@ -26,7 +27,7 @@ const FloorView = () => {
       return;
     }
     fetchData();
-  }, [activeSession]);
+  }, [activeSession, location.key]);
 
   const fetchData = async () => {
     try {
@@ -37,12 +38,16 @@ const FloorView = () => {
         api.get(`/api/orders?session_id=${activeSession.id}`),
       ]);
       
-      setFloors(floorsRes.data);
-      setTables(tablesRes.data);
-      setOrders(ordersRes.data);
+      const floorsData = floorsRes.data?.data ?? floorsRes.data ?? [];
+      const tablesData = tablesRes.data?.data ?? tablesRes.data ?? [];
+      const ordersData = ordersRes.data?.data ?? ordersRes.data ?? [];
+
+      setFloors(floorsData);
+      setTables(tablesData);
+      setOrders(ordersData);
       
-      if (floorsRes.data.length > 0 && !selectedFloor) {
-        setSelectedFloor(floorsRes.data[0]);
+      if (floorsData.length > 0 && !selectedFloor) {
+        setSelectedFloor(floorsData[0]);
       }
     } catch (error) {
       console.error('Failed to fetch floor data:', error);
@@ -129,7 +134,7 @@ const FloorView = () => {
             <div>
               <h1 className="text-xl font-bold text-gray-900">Odoo POS Cafe</h1>
               <p className="text-sm text-gray-600">
-                {activeSession?.terminal?.name} • {user?.name}
+                {activeSession?.terminal_name ?? activeSession?.terminal?.name ?? 'POS Terminal'} • {user?.name}
               </p>
             </div>
           </div>
@@ -190,7 +195,14 @@ const FloorView = () => {
       <div className="p-6">
         {selectedFloor ? (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
-            {filteredTables.map((table) => {
+            {filteredTables.length === 0 ? (
+              <div className="col-span-full text-center py-16 text-gray-500">
+                <div className="text-5xl mb-4">🪑</div>
+                <p className="text-lg font-medium">No tables on this floor</p>
+                <p className="text-sm mt-1">Go to Backend → Tables to add tables</p>
+              </div>
+            ) : (
+              filteredTables.map((table) => {
               const status = getTableStatus(table.id);
               const tableOrders = getTableOrders(table.id);
               const totalAmount = tableOrders.reduce((sum, order) => sum + (order.total_amount || 0), 0);
@@ -231,7 +243,8 @@ const FloorView = () => {
                   </div>
                 </button>
               );
-            })}
+              })
+            )}
           </div>
         ) : (
           <div className="text-center py-12 text-gray-500">

@@ -34,7 +34,7 @@ const Dashboard = () => {
     try {
       setLoading(true);
       const response = await api.get('/api/reports/summary');
-      setData(response.data);
+      setData(response.data?.data ?? response.data);
       setError(null);
     } catch (err) {
       setError('Failed to load dashboard data');

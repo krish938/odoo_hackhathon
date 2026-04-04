@@ -10,7 +10,7 @@ const createFloorController = async (req, res, next) => {
   try {
     const { name } = req.body;
     const floor = await createFloor(name);
-    res.status(201).json(floor);
+    res.status(201).json({ success: true, data: floor });
   } catch (error) {
     next(error);
   }
@@ -19,7 +19,7 @@ const createFloorController = async (req, res, next) => {
 const listFloorsController = async (req, res, next) => {
   try {
     const floors = await listFloors();
-    res.json(floors);
+    res.json({ success: true, data: floors });
   } catch (error) {
     next(error);
   }
@@ -29,7 +29,7 @@ const getFloorController = async (req, res, next) => {
   try {
     const { id } = req.params;
     const floor = await getFloorById(id);
-    res.json(floor);
+    res.json({ success: true, data: floor });
   } catch (error) {
     next(error);
   }
@@ -40,7 +40,7 @@ const updateFloorController = async (req, res, next) => {
     const { id } = req.params;
     const { name } = req.body;
     const floor = await updateFloor(id, name);
-    res.json(floor);
+    res.json({ success: true, data: floor });
   } catch (error) {
     next(error);
   }
@@ -50,7 +50,7 @@ const deleteFloorController = async (req, res, next) => {
   try {
     const { id } = req.params;
     const result = await deleteFloor(id);
-    res.json(result);
+    res.json({ success: true, data: result });
   } catch (error) {
     next(error);
   }

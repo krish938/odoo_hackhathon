@@ -9,7 +9,7 @@ const createAttributeController = async (req, res, next) => {
   try {
     const { name } = req.body;
     const attribute = await createAttribute(name);
-    res.status(201).json(attribute);
+    res.status(201).json({ success: true, data: attribute });
   } catch (error) {
     next(error);
   }
@@ -18,7 +18,7 @@ const createAttributeController = async (req, res, next) => {
 const listAttributesController = async (req, res, next) => {
   try {
     const attributes = await listAttributes();
-    res.json(attributes);
+    res.json({ success: true, data: attributes });
   } catch (error) {
     next(error);
   }
@@ -29,7 +29,7 @@ const createAttributeValueController = async (req, res, next) => {
     const { id } = req.params;
     const { value, extra_price } = req.body;
     const attributeValue = await createAttributeValue(id, value, extra_price);
-    res.status(201).json(attributeValue);
+    res.status(201).json({ success: true, data: attributeValue });
   } catch (error) {
     next(error);
   }
@@ -39,7 +39,7 @@ const deleteAttributeValueController = async (req, res, next) => {
   try {
     const { id, valueId } = req.params;
     const result = await deleteAttributeValue(id, valueId);
-    res.json(result);
+    res.json({ success: true, data: result });
   } catch (error) {
     next(error);
   }

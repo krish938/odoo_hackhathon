@@ -73,7 +73,11 @@ export default function KitchenDisplay() {
     });
 
     // Fallback polling every 30s (much less frequent, just as safety net)
-    const interval = setInterval(fetchTickets, 30000);
+    const interval = setInterval(() => {
+      if (!socket.connected) {
+        fetchTickets();
+      }
+    }, 30000);
 
     return () => {
       clearInterval(interval);

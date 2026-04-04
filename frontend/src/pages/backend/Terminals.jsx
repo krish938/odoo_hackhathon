@@ -7,7 +7,7 @@ import Modal from '../../components/ui/Modal';
 import Badge from '../../components/ui/Badge';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import Spinner from '../../components/ui/Spinner';
-import { Plus, Edit2, Trash2, Monitor, Play, Clock, DollarSign } from 'lucide-react';
+import { Plus, Edit2, Trash2, Monitor, Play, Clock, DollarSign, QrCode } from 'lucide-react';
 import { formatCurrency, formatDate } from '../../utils/formatCurrency';
 
 const Terminals = () => {
@@ -16,6 +16,8 @@ const Terminals = () => {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showQRModal, setShowQRModal] = useState(false);
+  const [selectedTerminalQR, setSelectedTerminalQR] = useState(null);
   const [editingTerminal, setEditingTerminal] = useState(null);
   const [deletingTerminal, setDeletingTerminal] = useState(null);
   const [formData, setFormData] = useState({ name: '' });
@@ -66,6 +68,11 @@ const Terminals = () => {
 
   const handleOpenSession = (terminal) => {
     navigate('/pos/open-session', { state: { terminalId: terminal.id } });
+  };
+
+  const openQRModal = (terminal) => {
+    setSelectedTerminalQR(terminal);
+    setShowQRModal(true);
   };
 
   const resetForm = () => {
@@ -172,6 +179,14 @@ const Terminals = () => {
                   : 'Open Session'
                 }
               </Button>
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => openQRModal(terminal)}
+              >
+                <QrCode className="h-4 w-4 mr-2" />
+                Self-Order QR
+              </Button>
             </div>
           </div>
         ))}
@@ -211,6 +226,33 @@ const Terminals = () => {
             </Button>
           </div>
         </form>
+      </Modal>
+
+      {/* QR Modal */}
+      <Modal
+        isOpen={showQRModal}
+        onClose={() => setShowQRModal(false)}
+        title="Self-Order Options"
+      >
+        <div className="text-center p-6">
+          <div className="mb-4 text-sm text-gray-500">
+            Customers can follow this link to place self-orders directly for this terminal.
+          </div>
+          <div className="bg-gray-100 p-4 rounded-lg break-all mb-4">
+            {window.location.origin}/self-order?terminal_id={selectedTerminalQR?.id}
+          </div>
+          <div className="flex justify-center space-x-4">
+            <Button onClick={() => {
+              navigator.clipboard.writeText(`${window.location.origin}/self-order?terminal_id=${selectedTerminalQR?.id}`);
+              alert('Copied to clipboard!');
+            }}>
+              Copy Link
+            </Button>
+            <Button variant="outline" onClick={() => window.open(`/self-order?terminal_id=${selectedTerminalQR?.id}`, '_blank')}>
+              Open in New Tab
+            </Button>
+          </div>
+        </div>
       </Modal>
 
       {/* Delete Confirmation */}

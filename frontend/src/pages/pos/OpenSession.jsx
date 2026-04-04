@@ -15,7 +15,7 @@ const OpenSession = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuthStore();
-  const { setSession } = usePosStore();
+  const { setSession, clearSession } = usePosStore();
   const [terminals, setTerminals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [openingSession, setOpeningSession] = useState(false);
@@ -33,7 +33,7 @@ const OpenSession = () => {
     try {
       setLoading(true);
       const response = await api.get('/api/terminals');
-      setTerminals(response.data);
+      setTerminals(response.data?.data ?? response.data ?? []);
     } catch (error) {
       console.error('Failed to fetch terminals:', error);
     } finally {
@@ -53,12 +53,13 @@ const OpenSession = () => {
       };
 
       const response = await api.post('/api/sessions/open', sessionData);
-      const session = response.data;
+      const session = response.data?.data ?? response.data;
       
       // Fetch complete session data with terminal info
       const fullSessionResponse = await api.get(`/api/sessions/${session.id}`);
-      const fullSession = fullSessionResponse.data;
+      const fullSession = fullSessionResponse.data?.data ?? fullSessionResponse.data;
       
+      clearSession();
       setSession(fullSession);
       navigate('/pos/floor');
     } catch (error) {

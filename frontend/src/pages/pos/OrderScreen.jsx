@@ -13,7 +13,7 @@ import { ArrowLeft, Send, CreditCard, Plus, Minus, Trash2, Search } from 'lucide
 const OrderScreen = () => {
   const { tableId } = useParams();
   const navigate = useNavigate();
-  const { activeSession, cart, addToCart, removeFromCart, updateQuantity, getCartSubtotal, getCartTax, getGrandTotal, setOrder, discount, setDiscount, tip, setTip } = usePosStore();
+  const { activeSession, cart, clearCart, addToCart, removeFromCart, updateQuantity, getCartSubtotal, getCartTax, getGrandTotal, setOrder, discount, setDiscount, tip, setTip } = usePosStore();
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [table, setTable] = useState(null);
@@ -56,9 +56,13 @@ const OrderScreen = () => {
       const existingOrders = ordersRes.data?.data ?? ordersRes.data ?? [];
 
       if (Array.isArray(existingOrders) && existingOrders.length > 0) {
+        clearCart(); // clear local cart first
         const order = existingOrders[0];
-        setActiveOrder(order);
-        setOrder(order);
+        // Fetch full order with items
+        const fullOrderRes = await api.get(`/api/orders/${order.id}`);
+        const fullOrder = fullOrderRes.data?.data ?? fullOrderRes.data;
+        setActiveOrder(fullOrder);
+        setOrder(fullOrder);
       }
     } catch (error) {
       console.error('Failed to fetch order data:', error);
@@ -148,14 +152,15 @@ const OrderScreen = () => {
           quantity: item.quantity,
           base_price: item.base_price,
           unit_price: item.unit_price,
+          attribute_value_ids: item.attributes
+            ? item.attributes.map(a => a.attribute_value_id).filter(Boolean)
+            : [],
         });
-        
-        // Add attributes if any
-        if (item.attributes && item.attributes.length > 0) {
-          // This would need to be implemented in the backend
-        }
       }
       
+      // Transition order to IN_PROGRESS before sending to kitchen
+      await api.put(`/api/orders/${order.id}/status`, { status: 'IN_PROGRESS' });
+
       // Send to kitchen
       await api.post(`/api/orders/${order.id}/send-to-kitchen`);
       
@@ -171,15 +176,15 @@ const OrderScreen = () => {
     }
   };
 
-  const handleCharge = () => {
+  const handleCharge = async () => {
     if (cart.length === 0) return;
     
-    // If we have an order, navigate to payment
-    if (activeOrder) {
+    if (activeOrder && activeOrder.status === 'IN_PROGRESS') {
+      // Order already sent to kitchen, go straight to payment
       navigate(`/pos/payment/${activeOrder.id}`);
     } else {
-      // Create order first, then navigate
-      handleSendToKitchen();
+      // Need to create/send first
+      await handleSendToKitchen();
     }
   };
 
@@ -305,7 +310,7 @@ const OrderScreen = () => {
                   <div key={index} className="flex items-center space-x-4 bg-gray-50 rounded-lg p-3">
                     <div className="flex-1">
                       <h4 className="font-medium text-gray-900">
-                        {item.product.name}
+                        {item.product_name ?? item.product?.name ?? 'Unknown product'}
                       </h4>
                       {item.attributes && item.attributes.length > 0 && (
                         <div className="text-xs text-gray-500 mt-1">

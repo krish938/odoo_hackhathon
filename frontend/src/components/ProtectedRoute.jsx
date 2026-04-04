@@ -16,7 +16,10 @@ const ProtectedRoute = ({ children, roles = [] }) => {
   if (roles.length > 0) {
     const hasRequiredRole = roles.some(role => hasRole(role));
     if (!hasRequiredRole) {
-      // Redirect to dashboard with 403 state
+      // Redirect to appropriate area if unauthorized
+      if (hasRole('staff')) {
+        return <Navigate to="/pos/floor" state={{ error: '403' }} replace />;
+      }
       return <Navigate to="/backend/dashboard" state={{ error: '403' }} replace />;
     }
   }

@@ -42,13 +42,18 @@ const PaymentScreen = () => {
         api.get(`/api/payments/${orderId}`),
       ]);
       
-      setOrder(orderRes.data);
-      setPaymentMethods(paymentMethodsRes.data.filter(pm => pm.is_enabled));
-      setPayments(paymentsRes.data);
+      const orderData = orderRes.data?.data ?? orderRes.data;
+      setOrder(orderData);
+      
+      const methods = paymentMethodsRes.data?.data ?? paymentMethodsRes.data ?? [];
+      setPaymentMethods(Array.isArray(methods) ? methods.filter(pm => pm.is_enabled) : []);
+      
+      const paymentsData = paymentsRes.data?.data ?? paymentsRes.data ?? [];
+      setPayments(paymentsData);
       
       // Set default payment amount to remaining balance
-      const paidAmount = paymentsRes.data.reduce((sum, p) => sum + (p.amount || 0), 0);
-      const remaining = (orderRes.data.total_amount || 0) - paidAmount;
+      const paidAmount = paymentsData.reduce((sum, p) => sum + (p.amount || 0), 0);
+      const remaining = (orderData?.total_amount || 0) - paidAmount;
       setPaymentAmount(remaining > 0 ? remaining.toString() : '');
     } catch (error) {
       console.error('Failed to fetch payment data:', error);
@@ -80,8 +85,16 @@ const PaymentScreen = () => {
       setProcessingPayment(true);
       
       if (selectedMethod.type === 'UPI') {
+        setProcessingPayment(false);
         setShowUPIQR(true);
         return;
+      }
+      
+      // Ensure order is COMPLETED before payment
+      const currentOrder = await api.get(`/api/orders/${orderId}`);
+      const currentOrderData = currentOrder.data?.data ?? currentOrder.data;
+      if (currentOrderData.status === 'IN_PROGRESS') {
+        await api.put(`/api/orders/${orderId}/status`, { status: 'COMPLETED' });
       }
       
       const paymentData = {
@@ -94,15 +107,16 @@ const PaymentScreen = () => {
       
       // Refresh payments
       const paymentsRes = await api.get(`/api/payments/${orderId}`);
-      setPayments(paymentsRes.data);
+      const freshPayments = paymentsRes.data?.data ?? paymentsRes.data ?? [];
+      setPayments(freshPayments);
       
-      // Update payment amount to remaining balance
-      const remaining = getRemainingAmount();
-      setPaymentAmount(remaining > 0 ? remaining.toString() : '');
+      const freshPaid = freshPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+      const freshRemaining = (order?.total_amount || 0) - freshPaid;
       
-      // Check if fully paid
-      if (isFullyPaid()) {
+      if (freshRemaining <= 0.01) {
         await handlePaymentComplete();
+      } else {
+        setPaymentAmount(freshRemaining > 0 ? freshRemaining.toFixed(2) : '');
       }
     } catch (error) {
       console.error('Failed to process payment:', error);
@@ -120,6 +134,13 @@ const PaymentScreen = () => {
     try {
       setProcessingPayment(true);
       
+      // Ensure order is COMPLETED before payment
+      const currentOrder = await api.get(`/api/orders/${orderId}`);
+      const currentOrderData = currentOrder.data?.data ?? currentOrder.data;
+      if (currentOrderData.status === 'IN_PROGRESS') {
+        await api.put(`/api/orders/${orderId}/status`, { status: 'COMPLETED' });
+      }
+
       const paymentData = {
         order_id: parseInt(orderId),
         payment_method_id: selectedMethod.id,
@@ -132,17 +153,18 @@ const PaymentScreen = () => {
       
       // Refresh payments
       const paymentsRes = await api.get(`/api/payments/${orderId}`);
-      setPayments(paymentsRes.data);
+      const freshPayments = paymentsRes.data?.data ?? paymentsRes.data ?? [];
+      setPayments(freshPayments);
       
       setShowUPIQR(false);
       
-      // Check if fully paid
-      if (isFullyPaid()) {
+      const freshPaid = freshPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+      const freshRemaining = (order?.total_amount || 0) - freshPaid;
+      
+      if (freshRemaining <= 0.01) {
         await handlePaymentComplete();
       } else {
-        // Update payment amount to remaining balance
-        const remaining = getRemainingAmount();
-        setPaymentAmount(remaining > 0 ? remaining.toString() : '');
+        setPaymentAmount(freshRemaining > 0 ? freshRemaining.toFixed(2) : '');
       }
     } catch (error) {
       console.error('Failed to process UPI payment:', error);
@@ -152,22 +174,13 @@ const PaymentScreen = () => {
   };
 
   const handlePaymentComplete = async () => {
-    try {
-      // Update order status to PAID
-      await api.put(`/api/orders/${orderId}/status`, { status: 'PAID' });
-      
-      // Show success screen
-      setShowSuccess(true);
-      
-      // Clear cart and redirect after 2 seconds
-      setTimeout(() => {
-        clearCart();
-        setShowSuccess(false);
-        navigate('/pos/floor');
-      }, 2000);
-    } catch (error) {
-      console.error('Failed to complete payment:', error);
-    }
+    // Payment service already marks order PAID when fully paid — no need to call status update
+    setShowSuccess(true);
+    setTimeout(() => {
+      clearCart();
+      setShowSuccess(false);
+      navigate('/pos/floor');
+    }, 2000);
   };
 
   const getPaymentIcon = (type) => {
@@ -254,7 +267,7 @@ const PaymentScreen = () => {
               <div key={index} className="flex justify-between items-center py-2 border-b border-gray-100">
                 <div className="flex-1">
                   <div className="font-medium text-gray-900">
-                    {item.product?.name}
+                    {item.product_name ?? item.product?.name ?? 'Unknown Product'}
                   </div>
                   <div className="text-sm text-gray-500">
                     {item.quantity} × {formatCurrency(item.unit_price)}
