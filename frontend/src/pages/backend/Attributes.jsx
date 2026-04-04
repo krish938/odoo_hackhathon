@@ -30,7 +30,7 @@ const Attributes = () => {
     try {
       setLoading(true);
       const response = await api.get('/api/attributes');
-      setAttributes(response.data);
+      setAttributes(response.data?.data ?? response.data ?? []);
     } catch (error) {
       console.error('Failed to fetch attributes:', error);
     } finally {

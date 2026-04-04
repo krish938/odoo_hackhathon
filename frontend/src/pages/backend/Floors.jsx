@@ -42,7 +42,7 @@ const Floors = () => {
     try {
       setLoading(true);
       const response = await api.get('/api/floors');
-      setFloors(response.data);
+      setFloors(response.data?.data ?? response.data ?? []);
       if (response.data.length > 0 && !selectedFloor) {
         setSelectedFloor(response.data[0]);
       }
@@ -56,7 +56,7 @@ const Floors = () => {
   const fetchTables = async (floorId) => {
     try {
       const response = await api.get(`/api/floors/${floorId}/tables`);
-      setTables(response.data);
+      setTables(response.data?.data ?? response.data ?? []);
     } catch (error) {
       console.error('Failed to fetch tables:', error);
     }

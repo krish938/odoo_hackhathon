@@ -30,7 +30,7 @@ const Terminals = () => {
     try {
       setLoading(true);
       const response = await api.get('/api/terminals');
-      setTerminals(response.data);
+      setTerminals(response.data?.data ?? response.data ?? []);
     } catch (error) {
       console.error('Failed to fetch terminals:', error);
     } finally {

@@ -3,7 +3,7 @@ const { listUsersForReports } = require('./users.service');
 const listUsersController = async (req, res, next) => {
   try {
     const users = await listUsersForReports();
-    res.json(users);
+    res.json({ success: true, data: users });
   } catch (error) {
     next(error);
   }

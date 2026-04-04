@@ -28,7 +28,7 @@ const Categories = () => {
     try {
       setLoading(true);
       const response = await api.get('/api/categories');
-      setCategories(response.data);
+      setCategories(response.data?.data ?? response.data ?? []);
     } catch (error) {
       console.error('Failed to fetch categories:', error);
     } finally {

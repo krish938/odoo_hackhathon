@@ -30,7 +30,7 @@ const PaymentMethods = () => {
     try {
       setLoading(true);
       const response = await api.get('/api/payment-methods');
-      setPaymentMethods(response.data);
+      setPaymentMethods(response.data?.data ?? response.data ?? []);
     } catch (error) {
       console.error('Failed to fetch payment methods:', error);
     } finally {
