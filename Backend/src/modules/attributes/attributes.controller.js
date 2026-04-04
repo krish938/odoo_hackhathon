@@ -1,0 +1,53 @@
+const {
+  createAttribute,
+  listAttributes,
+  createAttributeValue,
+  deleteAttributeValue,
+} = require('./attributes.service');
+
+const createAttributeController = async (req, res, next) => {
+  try {
+    const { name } = req.body;
+    const attribute = await createAttribute(name);
+    res.status(201).json(attribute);
+  } catch (error) {
+    next(error);
+  }
+};
+
+const listAttributesController = async (req, res, next) => {
+  try {
+    const attributes = await listAttributes();
+    res.json(attributes);
+  } catch (error) {
+    next(error);
+  }
+};
+
+const createAttributeValueController = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { value, extra_price } = req.body;
+    const attributeValue = await createAttributeValue(id, value, extra_price);
+    res.status(201).json(attributeValue);
+  } catch (error) {
+    next(error);
+  }
+};
+
+const deleteAttributeValueController = async (req, res, next) => {
+  try {
+    const { id, valueId } = req.params;
+    const result = await deleteAttributeValue(id, valueId);
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = {
+  createAttributeController,
+  listAttributesController,
+  createAttributeValueController,
+  deleteAttributeValueController,
+};
