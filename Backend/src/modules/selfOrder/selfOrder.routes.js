@@ -3,6 +3,7 @@ const {
   createTokenController,
   getMenuController,
   createSelfOrderController,
+  invalidateTokenController,
 } = require('./selfOrder.controller');
 const {
   createTokenSchema,
@@ -21,6 +22,14 @@ router.post(
   requireRole(['admin', 'manager']),
   validate(createTokenSchema),
   createTokenController
+);
+
+// DELETE /api/self-order/tokens/:token - Invalidate a self-order token
+router.delete(
+  '/tokens/:token',
+  verifyToken,
+  requireRole(['admin', 'manager']),
+  invalidateTokenController
 );
 
 // GET /api/self-order/menu - Get menu (no auth required, token-based)

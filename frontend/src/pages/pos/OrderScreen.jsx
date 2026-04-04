@@ -42,16 +42,20 @@ const OrderScreen = () => {
         api.get('/api/categories'),
         api.get(`/api/tables/${tableId}`),
       ]);
-      
-      setProducts(productsRes.data.filter(p => p.is_active));
-      setCategories(categoriesRes.data);
-      setTable(tableRes.data);
-      
+
+      const productsList = productsRes.data?.data ?? productsRes.data ?? [];
+      const categoriesList = categoriesRes.data?.data ?? categoriesRes.data ?? [];
+      const tableData = tableRes.data?.data ?? tableRes.data;
+
+      setProducts(Array.isArray(productsList) ? productsList.filter(p => p.is_active) : []);
+      setCategories(Array.isArray(categoriesList) ? categoriesList : []);
+      setTable(tableData);
+
       // Check for existing active order
       const ordersRes = await api.get(`/api/orders?table_id=${tableId}&session_id=${activeSession.id}&status=CREATED,IN_PROGRESS`);
-      const existingOrders = ordersRes.data;
-      
-      if (existingOrders.length > 0) {
+      const existingOrders = ordersRes.data?.data ?? ordersRes.data ?? [];
+
+      if (Array.isArray(existingOrders) && existingOrders.length > 0) {
         const order = existingOrders[0];
         setActiveOrder(order);
         setOrder(order);
@@ -70,19 +74,29 @@ const OrderScreen = () => {
   });
 
   const handleProductClick = async (product) => {
-    // Check if product has attributes
-    if (product.attributes && product.attributes.length > 0) {
-      setSelectedProduct(product);
-      setSelectedAttributes({});
-      setShowAttributeModal(true);
-    } else {
+    try {
+      // Fetch attributes from API to check if product has variants
+      const res = await api.get(`/api/products/${product.id}/attributes`);
+      const attributes = res.data?.data ?? res.data ?? [];
+
+      if (Array.isArray(attributes) && attributes.length > 0 && attributes.some(a => a.values && a.values.length > 0)) {
+        // Product has selectable attributes — show variant picker
+        setSelectedProduct({ ...product, attributes });
+        setSelectedAttributes({});
+        setShowAttributeModal(true);
+      } else {
+        // No attributes — add directly
+        addToCart(product);
+      }
+    } catch (err) {
+      // Fall back to direct add if attributes fetch fails
       addToCart(product);
     }
   };
 
   const handleAddToCart = () => {
     if (!selectedProduct) return;
-    
+
     const attributes = [];
     Object.entries(selectedAttributes).forEach(([attrId, valueId]) => {
       const attr = selectedProduct.attributes.find(a => a.id === parseInt(attrId));
@@ -93,12 +107,12 @@ const OrderScreen = () => {
             attribute_id: parseInt(attrId),
             attribute_value_id: parseInt(valueId),
             value: value.value,
-            extra_price: value.extra_price
+            extra_price: value.extra_price,
           });
         }
       }
     });
-    
+
     addToCart(selectedProduct, 1, attributes);
     setShowAttributeModal(false);
     setSelectedProduct(null);

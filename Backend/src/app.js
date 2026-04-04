@@ -2,7 +2,9 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const cookieParser = require('cookie-parser');
 const { env } = require('./config/env');
+const logger = require('./config/logger');
 
 // Import routes
 const authRoutes = require('./modules/auth/auth.routes');
@@ -23,37 +25,75 @@ const reportsRoutes = require('./modules/reports/reports.routes');
 
 // Import middlewares
 const errorHandler = require('./middlewares/errorHandler');
+const requestId = require('./middlewares/requestId');
 
 const app = express();
 
 // Security middleware
 app.use(helmet());
-app.use(cors());
 
-// Rate limiting
+// Configure CORS properly
+const allowedOrigins = env.ALLOWED_ORIGINS.split(',').map(o => o.trim());
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow requests with no origin (mobile apps, Postman, server-to-server)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(null, true); // Allow all for dev; tighten in prod
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-Id'],
+}));
+
+// General rate limiting
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
-  message: 'Too many requests from this IP, please try again later.',
+  windowMs: 15 * 60 * 1000,
+  max: 200,
+  message: { success: false, error: 'Too many requests from this IP, please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
 });
 app.use(limiter);
+
+// Stricter rate limiting for auth endpoints
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { success: false, error: 'Too many authentication attempts, please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(cookieParser());
+
+// Request ID for tracing
+app.use(requestId);
+
+// Request logging
+app.use((req, res, next) => {
+  logger.info({ requestId: req.id, method: req.method, path: req.path }, 'Incoming request');
+  next();
+});
 
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.json({
-    status: 'OK',
-    timestamp: new Date().toISOString(),
-    service: 'Odoo POS Cafe API',
-    version: '1.0.0',
+    success: true,
+    data: {
+      status: 'OK',
+      timestamp: new Date().toISOString(),
+      service: 'Odoo POS Cafe API',
+      version: '1.0.0',
+    },
   });
 });
 
 // API routes
-app.use('/api/auth', authRoutes);
+app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/products', productsRoutes);
 app.use('/api/categories', categoriesRoutes);
 app.use('/api/attributes', attributesRoutes);
@@ -74,9 +114,9 @@ app.use('/api/floors/:id/tables', tablesByFloorRouter);
 // 404 handler
 app.use('*', (req, res) => {
   res.status(404).json({
+    success: false,
     error: 'Route not found',
-    path: req.originalUrl,
-    method: req.method,
+    message: `${req.method} ${req.originalUrl} is not a valid route`,
   });
 });
 

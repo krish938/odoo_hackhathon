@@ -1,195 +1,293 @@
-import React from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { usePolling } from '../hooks/usePolling';
+import { useState, useEffect, useCallback } from 'react';
+import { connectSocket, disconnectSocket } from '../utils/socket';
 import api from '../api/axios';
-import { formatCurrency } from '../utils/formatCurrency';
-import Badge from '../components/ui/Badge';
-import Spinner from '../components/ui/Spinner';
-import { Coffee, Check, Clock } from 'lucide-react';
 
-const CustomerDisplay = () => {
-  const [searchParams] = useSearchParams();
-  const sessionId = searchParams.get('session_id') || localStorage.getItem('pos_session')?.match(/"activeSession":{[^}]*"id":(\d+)/)?.[1];
+const STATUS_CONFIG = {
+  CREATED: { label: 'Order Received', color: '#3b82f6', icon: '📋', bg: 'rgba(59,130,246,0.1)' },
+  IN_PROGRESS: { label: 'Being Prepared', color: '#f59e0b', icon: '👨‍🍳', bg: 'rgba(245,158,11,0.1)' },
+  PREPARING: { label: 'Cooking Now', color: '#f97316', icon: '🔥', bg: 'rgba(249,115,22,0.1)' },
+  COMPLETED: { label: 'Ready to Serve!', color: '#22c55e', icon: '✅', bg: 'rgba(34,197,94,0.1)' },
+  PAID: { label: 'Payment Received', color: '#8b5cf6', icon: '💳', bg: 'rgba(139,92,246,0.1)' },
+};
 
-  const { data: orders, loading, error } = usePolling(
-    () => {
-      if (!sessionId) return Promise.resolve({ data: [] });
-      return api.get(`/api/orders?session_id=${sessionId}&status=IN_PROGRESS`);
-    },
-    3000 // Poll every 3 seconds
-  );
+const THANK_YOU_TIMEOUT = 30000; // 30 seconds
 
-  if (loading) {
+export default function CustomerDisplay() {
+  const [order, setOrder] = useState(null);
+  const [items, setItems] = useState([]);
+  const [status, setStatus] = useState(null);
+  const [showThankYou, setShowThankYou] = useState(false);
+  const [connected, setConnected] = useState(false);
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const fetchCurrentOrder = useCallback(async (orderId) => {
+    try {
+      const res = await api.get(`/api/orders/${orderId}`);
+      const data = res.data?.data ?? res.data;
+      if (data) {
+        setOrder(data);
+        setItems(data.items || []);
+        setStatus(data.status);
+      }
+    } catch (err) {
+      console.error('Failed to fetch order:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    const socket = connectSocket();
+
+    socket.on('connect', () => {
+      setConnected(true);
+      socket.emit('join_customer_display');
+    });
+
+    socket.on('disconnect', () => setConnected(false));
+
+    socket.on('order_status_changed', (data) => {
+      if (order && data.order_id === order.id) {
+        setStatus(data.status);
+        fetchCurrentOrder(data.order_id);
+      }
+    });
+
+    socket.on('order_paid', (data) => {
+      if (!order || data.order_id == order?.id) {
+        setShowThankYou(true);
+        setTimeout(() => {
+          setShowThankYou(false);
+          setOrder(null);
+          setItems([]);
+          setStatus(null);
+        }, THANK_YOU_TIMEOUT);
+      }
+    });
+
+    return () => {
+      socket.off('connect');
+      socket.off('disconnect');
+      socket.off('order_status_changed');
+      socket.off('order_paid');
+      disconnectSocket();
+    };
+  }, [order, fetchCurrentOrder]);
+
+  const subtotal = items.reduce((sum, item) => sum + parseFloat(item.unit_price || 0) * item.quantity, 0);
+  const tax = items.reduce((sum, item) => {
+    const price = parseFloat(item.unit_price || 0);
+    const qty = item.quantity;
+    const taxRate = parseFloat(item.tax || 0) / 100;
+    return sum + price * qty * taxRate;
+  }, 0);
+  const statusConfig = status ? (STATUS_CONFIG[status] || STATUS_CONFIG['CREATED']) : null;
+
+  if (showThankYou) {
     return (
-      <div className="min-h-screen bg-page-bg flex items-center justify-center">
-        <Spinner size="lg" text="Loading customer display..." />
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="min-h-screen bg-page-bg flex items-center justify-center">
-        <div className="text-center">
-          <Coffee className="h-16 w-16 mx-auto mb-4 text-gray-400" />
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">Customer Display</h2>
-          <p className="text-gray-600">Unable to load order information</p>
-        </div>
-      </div>
-    );
-  }
-
-  const activeOrders = orders?.data || [];
-  const hasPaidOrders = activeOrders.some(order => order.status === 'PAID');
-
-  if (hasPaidOrders) {
-    return (
-      <div className="min-h-screen bg-success flex items-center justify-center">
-        <div className="text-center text-white">
-          <div className="mx-auto h-24 w-24 bg-white/20 rounded-full flex items-center justify-center mb-6">
-            <Check className="h-12 w-12 text-white" />
+      <div style={{
+        minHeight: '100vh',
+        background: 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%)',
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+        color: '#fff', fontFamily: "'Inter', sans-serif",
+        animation: 'fadeIn 0.5s ease-in',
+      }}>
+        <div style={{ textAlign: 'center', animation: 'bounceIn 0.6s ease-out' }}>
+          <div style={{ fontSize: 128, marginBottom: 24, animation: 'spin 2s linear' }}>🎉</div>
+          <h1 style={{ fontSize: 56, fontWeight: 800, color: '#22c55e', marginBottom: 8 }}>Thank You!</h1>
+          <p style={{ fontSize: 24, color: '#94a3b8', marginBottom: 32 }}>
+            Payment received. Enjoy your meal!
+          </p>
+          <div style={{
+            background: 'rgba(34,197,94,0.15)', border: '1px solid #22c55e',
+            borderRadius: 16, padding: '16px 32px',
+          }}>
+            <p style={{ margin: 0, color: '#22c55e', fontWeight: 600 }}>
+              💳 Payment Confirmed
+            </p>
           </div>
-          <h1 className="text-4xl font-bold mb-4">Thank You!</h1>
-          <p className="text-2xl mb-2">Payment Received</p>
-          <p className="text-lg opacity-90">Your order has been completed successfully</p>
         </div>
-      </div>
-    );
-  }
-
-  if (activeOrders.length === 0) {
-    return (
-      <div className="min-h-screen bg-page-bg flex items-center justify-center">
-        <div className="text-center">
-          <Coffee className="h-16 w-16 mx-auto mb-4 text-gray-400" />
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Welcome to Odoo POS Cafe</h2>
-          <p className="text-gray-600">No active orders at the moment</p>
-        </div>
+        <style>{`
+          @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+          @keyframes bounceIn { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+          @keyframes spin { from { transform: rotate(-10deg); } to { transform: rotate(10deg); } }
+        `}</style>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-page-bg p-8">
-      <div className="max-w-4xl mx-auto">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <div className="flex items-center justify-center mb-4">
-            <Coffee className="h-12 w-12 text-primary" />
+    <div style={{
+      minHeight: '100vh',
+      background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
+      color: '#fff',
+      fontFamily: "'Inter', sans-serif",
+      display: 'flex', flexDirection: 'column',
+    }}>
+      {/* Header */}
+      <div style={{
+        background: 'rgba(255,255,255,0.05)',
+        backdropFilter: 'blur(10px)',
+        borderBottom: '1px solid rgba(255,255,255,0.1)',
+        padding: '16px 32px',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ fontSize: 32 }}>☕</span>
+          <div>
+            <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>Odoo POS Cafe</h1>
+            <p style={{ margin: 0, fontSize: 12, color: '#94a3b8' }}>Customer Display</p>
           </div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Odoo POS Cafe</h1>
-          <p className="text-gray-600">Customer Display</p>
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          <div style={{ fontSize: 28, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+            {currentTime.toLocaleTimeString()}
+          </div>
+          <div style={{ fontSize: 13, color: '#94a3b8' }}>
+            {currentTime.toLocaleDateString('en-IN', { weekday: 'long', day: '2-digit', month: 'long' })}
+          </div>
+        </div>
+      </div>
+
+      <div style={{ flex: 1, display: 'flex', padding: 32, gap: 32 }}>
+        {/* Order Items Panel */}
+        <div style={{ flex: 2 }}>
+          {!order ? (
+            <div style={{
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              height: '100%', textAlign: 'center', minHeight: 400,
+            }}>
+              <div style={{ fontSize: 96, marginBottom: 24, animation: 'float 3s ease-in-out infinite' }}>🛍️</div>
+              <h2 style={{ fontSize: 28, fontWeight: 600, color: '#94a3b8', margin: 0 }}>
+                Welcome!
+              </h2>
+              <p style={{ color: '#475569', marginTop: 8 }}>Your order details will appear here</p>
+              {/* Connection indicator */}
+              <div style={{
+                marginTop: 32, display: 'flex', alignItems: 'center', gap: 8,
+                padding: '8px 16px', borderRadius: 20,
+                background: connected ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)',
+              }}>
+                <div style={{
+                  width: 8, height: 8, borderRadius: '50%',
+                  background: connected ? '#22c55e' : '#ef4444',
+                }} />
+                <span style={{ fontSize: 13, color: connected ? '#22c55e' : '#ef4444' }}>
+                  {connected ? 'Connected' : 'Connecting...'}
+                </span>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <div style={{ marginBottom: 20 }}>
+                <h2 style={{ fontSize: 18, fontWeight: 700, margin: '0 0 4px' }}>
+                  Order #{order.order_number}
+                </h2>
+                {order.table_number && (
+                  <p style={{ margin: 0, color: '#94a3b8', fontSize: 14 }}>
+                    🪑 Table {order.table_number} {order.floor_name ? `· ${order.floor_name}` : ''}
+                  </p>
+                )}
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {items.map((item, i) => (
+                  <div key={i} style={{
+                    background: 'rgba(255,255,255,0.05)',
+                    borderRadius: 12, padding: '14px 20px',
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    border: '1px solid rgba(255,255,255,0.08)',
+                    animation: 'slideIn 0.3s ease-out',
+                  }}>
+                    <div>
+                      <div style={{ fontWeight: 600 }}>{item.product_name}</div>
+                      {item.options && item.options.length > 0 && (
+                        <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>
+                          {item.options.map(o => `${o.attribute_name}: ${o.value}`).join(', ')}
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontWeight: 700, fontSize: 16 }}>
+                        ₹{(parseFloat(item.unit_price) * item.quantity).toFixed(2)}
+                      </div>
+                      <div style={{ fontSize: 12, color: '#94a3b8' }}>
+                        × {item.quantity} @ ₹{parseFloat(item.unit_price).toFixed(2)}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Orders */}
-        <div className="space-y-6">
-          {activeOrders.map((order) => (
-            <div key={order.id} className="bg-white rounded-xl shadow-lg overflow-hidden">
-              {/* Order Header */}
-              <div className="bg-primary text-white p-6">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <h2 className="text-2xl font-bold mb-1">
-                      Order {order.order_number}
-                    </h2>
-                    <p className="opacity-90">
-                      Table {order.table?.table_number || 'N/A'}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <Badge variant="warning" className="mb-2">
-                      {order.status}
-                    </Badge>
-                    <p className="text-3xl font-bold">
-                      {formatCurrency(order.total_amount)}
-                    </p>
-                  </div>
-                </div>
+        {/* Right Panel — Status + Total */}
+        {order && (
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 20 }}>
+            {/* Status Card */}
+            {statusConfig && (
+              <div style={{
+                background: statusConfig.bg,
+                border: `2px solid ${statusConfig.color}`,
+                borderRadius: 16, padding: 28, textAlign: 'center',
+                animation: 'pulse 2s infinite',
+              }}>
+                <div style={{ fontSize: 56, marginBottom: 12 }}>{statusConfig.icon}</div>
+                <h2 style={{ margin: 0, fontSize: 24, color: statusConfig.color, fontWeight: 800 }}>
+                  {statusConfig.label}
+                </h2>
               </div>
+            )}
 
-              {/* Order Items */}
-              <div className="p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Order Items</h3>
-                <div className="space-y-4">
-                  {order.items?.map((item, index) => (
-                    <div key={index} className="flex justify-between items-center py-3 border-b border-gray-100 last:border-0">
-                      <div className="flex items-center space-x-4">
-                        <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
-                          <span className="text-xl">🍽️</span>
-                        </div>
-                        <div>
-                          <p className="font-medium text-gray-900 text-lg">
-                            {item.quantity}x {item.product?.name}
-                          </p>
-                          {item.product?.attributes && item.product.attributes.length > 0 && (
-                            <p className="text-sm text-gray-500">
-                              {item.product.attributes.map(attr => attr.value).join(', ')}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-semibold text-gray-900 text-lg">
-                          {formatCurrency(item.quantity * item.unit_price)}
-                        </p>
-                        <p className="text-sm text-gray-500">
-                          {formatCurrency(item.unit_price)} each
-                        </p>
-                      </div>
-                    </div>
-                  ))}
+            {/* Bill Summary */}
+            <div style={{
+              background: 'rgba(255,255,255,0.05)',
+              borderRadius: 16, padding: 24,
+              border: '1px solid rgba(255,255,255,0.1)',
+            }}>
+              <h3 style={{ margin: '0 0 16px', fontSize: 16, fontWeight: 700 }}>Bill Summary</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: 14 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#94a3b8' }}>Subtotal</span>
+                  <span>₹{subtotal.toFixed(2)}</span>
                 </div>
-
-                {/* Order Summary */}
-                <div className="mt-6 pt-6 border-t border-gray-200">
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-lg">
-                      <span className="text-gray-600">Subtotal</span>
-                      <span className="font-medium">
-                        {formatCurrency(order.total_amount - (order.discount || 0) - (order.tip || 0))}
-                      </span>
-                    </div>
-                    {order.discount > 0 && (
-                      <div className="flex justify-between text-lg text-green-600">
-                        <span>Discount</span>
-                        <span>-{formatCurrency(order.discount)}</span>
-                      </div>
-                    )}
-                    {order.tip > 0 && (
-                      <div className="flex justify-between text-lg">
-                        <span>Tip</span>
-                        <span>{formatCurrency(order.tip)}</span>
-                      </div>
-                    )}
-                    <div className="flex justify-between text-xl font-bold pt-2 border-t">
-                      <span>Total</span>
-                      <span>{formatCurrency(order.total_amount)}</span>
-                    </div>
-                  </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#94a3b8' }}>Tax</span>
+                  <span>₹{tax.toFixed(2)}</span>
                 </div>
-              </div>
-
-              {/* Status Footer */}
-              <div className="bg-gray-50 px-6 py-4">
-                <div className="flex items-center justify-center">
-                  <Clock className="h-5 w-5 text-amber-600 mr-2" />
-                  <span className="text-amber-600 font-medium">
-                    Order is being prepared...
-                  </span>
+                <div style={{
+                  display: 'flex', justifyContent: 'space-between',
+                  borderTop: '1px solid rgba(255,255,255,0.1)',
+                  paddingTop: 10, marginTop: 4,
+                  fontWeight: 800, fontSize: 22,
+                }}>
+                  <span>Total</span>
+                  <span style={{ color: '#22c55e' }}>₹{(subtotal + tax).toFixed(2)}</span>
                 </div>
               </div>
             </div>
-          ))}
-        </div>
-
-        {/* Footer */}
-        <div className="text-center mt-8 text-gray-500">
-          <p className="text-sm">Screen updates automatically every 3 seconds</p>
-          <p className="text-xs mt-1">Last updated: {new Date().toLocaleTimeString()}</p>
-        </div>
+          </div>
+        )}
       </div>
+
+      <style>{`
+        @keyframes float {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-10px); }
+        }
+        @keyframes pulse {
+          0%, 100% { box-shadow: 0 0 0 0 rgba(255,255,255,0.1); }
+          50% { box-shadow: 0 0 0 8px rgba(255,255,255,0.0); }
+        }
+        @keyframes slideIn {
+          from { transform: translateX(-10px); opacity: 0; }
+          to { transform: translateX(0); opacity: 1; }
+        }
+      `}</style>
     </div>
   );
-};
-
-export default CustomerDisplay;
+}

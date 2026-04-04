@@ -2,6 +2,8 @@ const express = require('express');
 const {
   summaryReportController,
   ordersReportController,
+  exportPDFController,
+  exportXLSController,
 } = require('./reports.controller');
 const {
   summaryReportSchema,
@@ -16,10 +18,16 @@ const router = express.Router();
 router.use(verifyToken);
 router.use(requireRole(['admin', 'manager']));
 
-// GET /api/reports/summary - Get summary report (admin/manager only)
+// GET /api/reports/summary
 router.get('/summary', validate(summaryReportSchema), summaryReportController);
 
-// GET /api/reports/orders - Get orders report (admin/manager only)
+// GET /api/reports/orders
 router.get('/orders', validate(ordersReportSchema), ordersReportController);
+
+// GET /api/reports/export/pdf
+router.get('/export/pdf', exportPDFController);
+
+// GET /api/reports/export/xls
+router.get('/export/xls', exportXLSController);
 
 module.exports = router;

@@ -5,6 +5,7 @@ const {
   listProductsController,
   updateProductController,
   deleteProductController,
+  getProductAttributesController,
 } = require('./products.controller');
 const {
   createProductSchema,
@@ -26,28 +27,16 @@ router.get('/', validate(listProductsSchema), listProductsController);
 // GET /api/products/:id - Get product by ID (all authenticated users)
 router.get('/:id', validate(getProductSchema), getProductController);
 
+// GET /api/products/:id/attributes - Get applicable attributes for a product
+router.get('/:id/attributes', validate(getProductSchema), getProductAttributesController);
+
 // POST /api/products - Create product (admin/manager only)
-router.post(
-  '/',
-  requireRole(['admin', 'manager']),
-  validate(createProductSchema),
-  createProductController
-);
+router.post('/', requireRole(['admin', 'manager']), validate(createProductSchema), createProductController);
 
 // PUT /api/products/:id - Update product (admin/manager only)
-router.put(
-  '/:id',
-  requireRole(['admin', 'manager']),
-  validate(updateProductSchema),
-  updateProductController
-);
+router.put('/:id', requireRole(['admin', 'manager']), validate(updateProductSchema), updateProductController);
 
 // DELETE /api/products/:id - Soft delete product (admin/manager only)
-router.delete(
-  '/:id',
-  requireRole(['admin', 'manager']),
-  validate(getProductSchema),
-  deleteProductController
-);
+router.delete('/:id', requireRole(['admin', 'manager']), validate(getProductSchema), deleteProductController);
 
 module.exports = router;

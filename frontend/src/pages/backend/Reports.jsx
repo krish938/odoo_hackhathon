@@ -63,17 +63,18 @@ const Reports = () => {
     }
   };
 
+
   const fetchFilters = async () => {
+
     try {
       const [sessionsRes, usersRes, productsRes] = await Promise.all([
         api.get('/api/sessions'),
         api.get('/api/users'),
         api.get('/api/products'),
       ]);
-      
-      setSessions(sessionsRes.data);
-      setUsers(usersRes.data);
-      setProducts(productsRes.data);
+      setSessions(sessionsRes.data?.data?.sessions || sessionsRes.data?.sessions || sessionsRes.data || []);
+      setUsers(usersRes.data?.data || usersRes.data || []);
+      setProducts(productsRes.data?.data || productsRes.data || []);
     } catch (error) {
       console.error('Failed to fetch filters:', error);
     }
@@ -93,9 +94,33 @@ const Reports = () => {
     });
   };
 
-  const exportData = (format) => {
-    // Placeholder for export functionality
-    alert(`${format} export feature coming soon!`);
+  const exportData = async (format) => {
+    try {
+      const params = new URLSearchParams();
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value) params.append(key, value);
+      });
+      const ext = format === 'PDF' ? 'pdf' : 'xls';
+      const endpoint = `/api/reports/export/${ext}?${params}`;
+      const token = localStorage.getItem('pos_token');
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL || 'http://localhost:3002'}${endpoint}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (!response.ok) throw new Error('Export failed');
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `sales_report_${Date.now()}.${ext === 'xls' ? 'xlsx' : ext}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Export failed:', err);
+      alert('Export failed. Please try again.');
+    }
   };
 
   if (loading) {

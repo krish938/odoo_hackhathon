@@ -1,5 +1,9 @@
+const logger = require('../config/logger');
+
 const errorHandler = (err, req, res, next) => {
-  console.error('Error:', err);
+  const requestId = req.id || 'unknown';
+
+  logger.error({ requestId, err, path: req.path, method: req.method }, 'Request failed');
 
   if (err.status) {
     return res.status(err.status).json({
@@ -30,7 +34,7 @@ const errorHandler = (err, req, res, next) => {
     return res.status(400).json({
       success: false,
       error: 'Invalid reference',
-      message: 'Invalid reference',
+      message: 'Invalid reference — related resource does not exist',
     });
   }
 
@@ -38,7 +42,15 @@ const errorHandler = (err, req, res, next) => {
     return res.status(400).json({
       success: false,
       error: 'Required field missing',
-      message: 'Required field missing',
+      message: 'A required field is missing',
+    });
+  }
+
+  if (err.code === '23514') {
+    return res.status(400).json({
+      success: false,
+      error: 'Constraint violation',
+      message: 'Value violates a database constraint (e.g. negative price)',
     });
   }
 
@@ -46,6 +58,7 @@ const errorHandler = (err, req, res, next) => {
     success: false,
     error: 'Internal server error',
     message: 'Internal server error',
+    requestId,
   });
 };
 

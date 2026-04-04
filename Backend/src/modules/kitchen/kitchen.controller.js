@@ -8,7 +8,7 @@ const {
 const listTicketsController = async (req, res, next) => {
   try {
     const tickets = await listKitchenTickets(req.query);
-    res.json(tickets);
+    res.json({ success: true, data: tickets });
   } catch (error) {
     next(error);
   }
@@ -18,7 +18,7 @@ const getTicketController = async (req, res, next) => {
   try {
     const { id } = req.params;
     const ticket = await getKitchenTicketById(id);
-    res.json(ticket);
+    res.json({ success: true, data: ticket });
   } catch (error) {
     next(error);
   }
@@ -28,8 +28,8 @@ const updateTicketStatusController = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
-    const result = await updateTicketStatus(id, status);
-    res.json(result);
+    const result = await updateTicketStatus(id, status, req.app);
+    res.json({ success: true, data: result });
   } catch (error) {
     next(error);
   }
@@ -39,8 +39,8 @@ const updateTicketItemStatusController = async (req, res, next) => {
   try {
     const { id, itemId } = req.params;
     const { status } = req.body;
-    const result = await updateTicketItemStatus(id, itemId, status);
-    res.json(result);
+    const result = await updateTicketItemStatus(id, itemId, status, req.app);
+    res.json({ success: true, data: result });
   } catch (error) {
     next(error);
   }

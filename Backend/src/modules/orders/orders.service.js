@@ -1,4 +1,4 @@
-const { query } = require('../../config/db');
+const { query, pool } = require('../../config/db');
 
 const generateOrderNumber = () => {
   const timestamp = Date.now();
@@ -46,6 +46,7 @@ const createOrder = async (orderData) => {
   return result.rows[0];
 };
 
+// addOrderItem wrapped in transaction to prevent partial inserts
 const addOrderItem = async (orderId, itemData) => {
   const { product_id, quantity, attribute_value_ids = [] } = itemData;
 
@@ -72,11 +73,11 @@ const addOrderItem = async (orderId, itemData) => {
 
   const product = productResult.rows[0];
   let extraPriceTotal = 0;
+  let attrValueRows = [];
 
   if (attribute_value_ids.length > 0) {
     const attrValuesResult = await query(
-      `SELECT id, extra_price FROM attribute_values 
-       WHERE id = ANY($1::int[])`,
+      `SELECT id, extra_price FROM attribute_values WHERE id = ANY($1::int[])`,
       [attribute_value_ids]
     );
 
@@ -84,45 +85,61 @@ const addOrderItem = async (orderId, itemData) => {
       throw { status: 400, message: 'One or more attribute values not found' };
     }
 
-    extraPriceTotal = attrValuesResult.rows.reduce((sum, row) => sum + parseFloat(row.extra_price), 0);
+    attrValueRows = attrValuesResult.rows;
+    extraPriceTotal = attrValueRows.reduce((sum, row) => sum + parseFloat(row.extra_price), 0);
   }
 
   const base_price = parseFloat(product.base_price);
   const unit_price = base_price + extraPriceTotal;
 
-  const result = await query(
-    `INSERT INTO order_items (order_id, product_id, quantity, base_price, unit_price)
-     VALUES ($1, $2, $3, $4, $5)
-     RETURNING *`,
-    [orderId, product_id, quantity, base_price, unit_price]
-  );
+  // Transaction: insert order_item + options + update total atomically
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
 
-  const orderItem = result.rows[0];
-
-  if (attribute_value_ids.length > 0) {
-    const optionValues = attribute_value_ids.map(attrValueId => 
-      `(${orderItem.id}, ${attrValueId})`
-    ).join(', ');
-
-    await query(
-      `INSERT INTO order_item_options (order_item_id, attribute_value_id)
-       VALUES ${optionValues}`
+    const result = await client.query(
+      `INSERT INTO order_items (order_id, product_id, quantity, base_price, unit_price)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING *`,
+      [orderId, product_id, quantity, base_price, unit_price]
     );
+
+    const orderItem = result.rows[0];
+
+    if (attribute_value_ids.length > 0) {
+      // Parameterized bulk insert for options (safe from SQL injection)
+      const optionParams = [];
+      const optionValues = attribute_value_ids.map((attrValueId, i) => {
+        optionParams.push(orderItem.id, attrValueId);
+        return `($${i * 2 + 1}, $${i * 2 + 2})`;
+      });
+
+      await client.query(
+        `INSERT INTO order_item_options (order_item_id, attribute_value_id) VALUES ${optionValues.join(', ')}`,
+        optionParams
+      );
+    }
+
+    await client.query(
+      `UPDATE orders
+       SET total_amount = (
+         SELECT COALESCE(SUM(unit_price * quantity), 0)
+         FROM order_items
+         WHERE order_id = $1
+       ),
+       updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1`,
+      [orderId]
+    );
+
+    await client.query('COMMIT');
+    return orderItem;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
   }
-
-  await query(
-    `UPDATE orders 
-     SET total_amount = (
-       SELECT COALESCE(SUM(unit_price * quantity), 0) 
-       FROM order_items 
-       WHERE order_id = $1
-     ),
-     updated_at = CURRENT_TIMESTAMP
-     WHERE id = $1`,
-    [orderId]
-  );
-
-  return orderItem;
 };
 
 const updateOrderItem = async (orderId, itemId, quantity) => {
@@ -143,10 +160,10 @@ const updateOrderItem = async (orderId, itemId, quantity) => {
   );
 
   await query(
-    `UPDATE orders 
+    `UPDATE orders
      SET total_amount = (
-       SELECT COALESCE(SUM(unit_price * quantity), 0) 
-       FROM order_items 
+       SELECT COALESCE(SUM(unit_price * quantity), 0)
+       FROM order_items
        WHERE order_id = $1
      ),
      updated_at = CURRENT_TIMESTAMP
@@ -169,29 +186,29 @@ const deleteOrderItem = async (orderId, itemId) => {
     throw { status: 404, message: 'Order item not found or cannot be deleted' };
   }
 
-  await query('BEGIN');
-
+  const client = await pool.connect();
   try {
-    await query('DELETE FROM order_item_options WHERE order_item_id = $1', [itemId]);
-    await query('DELETE FROM order_items WHERE id = $1', [itemId]);
-
-    await query(
-      `UPDATE orders 
+    await client.query('BEGIN');
+    await client.query('DELETE FROM order_item_options WHERE order_item_id = $1', [itemId]);
+    await client.query('DELETE FROM order_items WHERE id = $1', [itemId]);
+    await client.query(
+      `UPDATE orders
        SET total_amount = (
-         SELECT COALESCE(SUM(unit_price * quantity), 0) 
-         FROM order_items 
+         SELECT COALESCE(SUM(unit_price * quantity), 0)
+         FROM order_items
          WHERE order_id = $1
        ),
        updated_at = CURRENT_TIMESTAMP
        WHERE id = $1`,
       [orderId]
     );
-
-    await query('COMMIT');
+    await client.query('COMMIT');
     return { message: 'Order item deleted successfully' };
   } catch (error) {
-    await query('ROLLBACK');
+    await client.query('ROLLBACK');
     throw error;
+  } finally {
+    client.release();
   }
 };
 
@@ -210,37 +227,38 @@ const updateOrderStatus = async (orderId, newStatus) => {
     'CREATED': ['IN_PROGRESS'],
     'IN_PROGRESS': ['COMPLETED'],
     'COMPLETED': ['PAID'],
-    'PAID': []
+    'PAID': [],
   };
 
   if (!validTransitions[currentStatus].includes(newStatus)) {
     throw { status: 400, message: `Invalid status transition from ${currentStatus} to ${newStatus}` };
   }
 
-  await query('BEGIN');
-
+  const client = await pool.connect();
   try {
-    await query(
+    await client.query('BEGIN');
+    await client.query(
       'UPDATE orders SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
       [newStatus, orderId]
     );
-
-    await query(
+    await client.query(
       'INSERT INTO order_logs (order_id, status) VALUES ($1, $2)',
       [orderId, newStatus]
     );
+    await client.query('COMMIT');
 
-    await query('COMMIT');
     return { message: 'Order status updated successfully' };
   } catch (error) {
-    await query('ROLLBACK');
+    await client.query('ROLLBACK');
     throw error;
+  } finally {
+    client.release();
   }
 };
 
 const getOrderById = async (orderId) => {
   const orderResult = await query(
-    `SELECT o.*, 
+    `SELECT o.*,
             s.responsible_label,
             pt.name as terminal_name,
             t.table_number,
@@ -261,7 +279,7 @@ const getOrderById = async (orderId) => {
   const order = orderResult.rows[0];
 
   const itemsResult = await query(
-    `SELECT oi.*, 
+    `SELECT oi.*,
             p.name as product_name,
             COALESCE(
               json_agg(
@@ -271,7 +289,7 @@ const getOrderById = async (orderId) => {
                   'value', av.value,
                   'extra_price', av.extra_price
                 ) ORDER BY a.name
-              ) FILTER (WHERE oio.attribute_value_id IS NOT NULL), 
+              ) FILTER (WHERE oio.attribute_value_id IS NOT NULL),
               '[]'
             ) as options
      FROM order_items oi
@@ -286,12 +304,15 @@ const getOrderById = async (orderId) => {
   );
 
   order.items = itemsResult.rows;
-
   return order;
 };
 
 const listOrders = async (filters = {}) => {
-  const { session_id, table_id, status, source } = filters;
+  const { session_id, table_id, status, source, page = 1, limit = 50 } = filters;
+  const safeLimit = Math.min(parseInt(limit) || 50, 200);
+  const safePage = Math.max(parseInt(page) || 1, 1);
+  const offset = (safePage - 1) * safeLimit;
+
   let whereClause = 'WHERE 1=1';
   const params = [];
   let paramIndex = 1;
@@ -307,12 +328,9 @@ const listOrders = async (filters = {}) => {
   }
 
   if (status) {
-    const statuses = String(status)
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean);
+    const statuses = String(status).split(',').map(s => s.trim()).filter(Boolean);
     const allowed = new Set(['CREATED', 'IN_PROGRESS', 'COMPLETED', 'PAID']);
-    const filtered = statuses.filter((s) => allowed.has(s));
+    const filtered = statuses.filter(s => allowed.has(s));
     if (filtered.length === 1) {
       whereClause += ` AND o.status = $${paramIndex++}`;
       params.push(filtered[0]);
@@ -328,7 +346,7 @@ const listOrders = async (filters = {}) => {
   }
 
   const result = await query(
-    `SELECT o.*, 
+    `SELECT o.*,
             s.responsible_label,
             t.table_number,
             f.name as floor_name,
@@ -340,16 +358,17 @@ const listOrders = async (filters = {}) => {
      LEFT JOIN order_items oi ON o.id = oi.order_id
      ${whereClause}
      GROUP BY o.id, s.responsible_label, t.table_number, f.name
-     ORDER BY o.created_at DESC`,
-    params
+     ORDER BY o.created_at DESC
+     LIMIT $${paramIndex++} OFFSET $${paramIndex++}`,
+    [...params, safeLimit, offset]
   );
 
   return result.rows;
 };
 
-const sendToKitchen = async (orderId) => {
+const sendToKitchen = async (orderId, app) => {
   const orderCheck = await query(
-    'SELECT id, status FROM orders WHERE id = $1',
+    'SELECT id, status, order_number FROM orders WHERE id = $1',
     [orderId]
   );
 
@@ -370,18 +389,20 @@ const sendToKitchen = async (orderId) => {
     throw { status: 409, message: 'Kitchen ticket already exists for this order' };
   }
 
-  await query('BEGIN');
-
+  const client = await pool.connect();
   try {
-    const ticketResult = await query(
+    await client.query('BEGIN');
+
+    const ticketResult = await client.query(
       'INSERT INTO kitchen_tickets (order_id, status) VALUES ($1, $2) RETURNING id',
       [orderId, 'TO_COOK']
     );
 
     const ticketId = ticketResult.rows[0].id;
 
-    const itemsResult = await query(
-      `SELECT oi.id, p.send_to_kitchen, c.send_to_kitchen as category_send_to_kitchen
+    const itemsResult = await client.query(
+      `SELECT oi.id, p.name as product_name, oi.quantity,
+              p.send_to_kitchen, c.send_to_kitchen as category_send_to_kitchen
        FROM order_items oi
        JOIN products p ON oi.product_id = p.id
        JOIN categories c ON p.category_id = c.id
@@ -389,23 +410,58 @@ const sendToKitchen = async (orderId) => {
       [orderId]
     );
 
-    const kitchenItems = itemsResult.rows.filter(item => 
-      item.send_to_kitchen || item.category_send_to_kitchen
+    const kitchenItems = itemsResult.rows.filter(
+      item => item.send_to_kitchen || item.category_send_to_kitchen
     );
 
     if (kitchenItems.length > 0) {
-      const itemValues = kitchenItems.map(item => `(${ticketId}, ${item.id})`).join(', ');
-      await query(
-        `INSERT INTO kitchen_ticket_items (ticket_id, order_item_id, status)
-         VALUES ${itemValues}`
+      const itemParams = [];
+      const itemValues = kitchenItems.map((item, i) => {
+        itemParams.push(ticketId, item.id);
+        return `($${i * 2 + 1}, $${i * 2 + 2})`;
+      });
+
+      await client.query(
+        `INSERT INTO kitchen_ticket_items (ticket_id, order_item_id, status) VALUES ${itemValues.join(', ')}`,
+        itemParams
       );
     }
 
-    await query('COMMIT');
+    await client.query('COMMIT');
+
+    // Emit Socket.IO event to kitchen room
+    if (app) {
+      const io = app.get('io');
+      if (io) {
+        const orderData = orderCheck.rows[0];
+        const tableResult = await query(
+          `SELECT t.table_number, f.name as floor_name
+           FROM orders o
+           LEFT JOIN tables t ON o.table_id = t.id
+           LEFT JOIN floors f ON t.floor_id = f.id
+           WHERE o.id = $1`,
+          [orderId]
+        );
+        const tableInfo = tableResult.rows[0] || {};
+
+        io.to('kitchen').emit('new_order', {
+          ticket_id: ticketId,
+          order_id: orderId,
+          order_number: orderData.order_number,
+          table_number: tableInfo.table_number,
+          floor_name: tableInfo.floor_name,
+          items: kitchenItems.map(i => ({ name: i.product_name, quantity: i.quantity })),
+          created_at: new Date().toISOString(),
+        });
+      }
+    }
+
     return { message: 'Order sent to kitchen successfully', ticket_id: ticketId };
   } catch (error) {
-    await query('ROLLBACK');
+    await client.query('ROLLBACK');
     throw error;
+  } finally {
+    client.release();
   }
 };
 

@@ -181,13 +181,15 @@ const createSelfOrder = async (token, orderData) => {
       const orderItem = orderItemResult.rows[0];
 
       if (attribute_value_ids.length > 0) {
-        const optionValues = attribute_value_ids.map(attrValueId => 
-          `(${orderItem.id}, ${attrValueId})`
-        ).join(', ');
+        const optionParams = [];
+        const optionValues = attribute_value_ids.map((attrValueId, i) => {
+          optionParams.push(orderItem.id, attrValueId);
+          return `($${i * 2 + 1}, $${i * 2 + 2})`;
+        });
 
         await query(
-          `INSERT INTO order_item_options (order_item_id, attribute_value_id)
-           VALUES ${optionValues}`
+          `INSERT INTO order_item_options (order_item_id, attribute_value_id) VALUES ${optionValues.join(', ')}`,
+          optionParams
         );
       }
     }
@@ -235,10 +237,14 @@ const createSelfOrder = async (token, orderData) => {
 
       const ticketId = ticketResult.rows[0].id;
 
-      const itemValues = kitchenEligibleItems.map(item => `(${ticketId}, ${item.id})`).join(', ');
+      const itemParams = [];
+      const itemValues = kitchenEligibleItems.map((item, i) => {
+        itemParams.push(ticketId, item.id);
+        return `($${i * 2 + 1}, $${i * 2 + 2})`;
+      });
       await query(
-        `INSERT INTO kitchen_ticket_items (ticket_id, order_item_id, status)
-         VALUES ${itemValues}`
+        `INSERT INTO kitchen_ticket_items (ticket_id, order_item_id, status) VALUES ${itemValues.join(', ')}`,
+        itemParams
       );
     }
 
@@ -266,8 +272,20 @@ const createSelfOrder = async (token, orderData) => {
   }
 };
 
+const invalidateToken = async (token) => {
+  const result = await query(
+    'UPDATE self_order_tokens SET is_active = false WHERE token = $1 RETURNING token',
+    [token]
+  );
+  if (result.rows.length === 0) {
+    throw { status: 404, message: 'Token not found' };
+  }
+  return { message: 'Token invalidated successfully' };
+};
+
 module.exports = {
   createSelfOrderToken,
   getMenu,
   createSelfOrder,
+  invalidateToken,
 };

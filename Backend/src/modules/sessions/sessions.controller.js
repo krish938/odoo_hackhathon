@@ -10,7 +10,7 @@ const openSessionController = async (req, res, next) => {
     const { terminal_id, opening_balance } = req.body;
     const { id: userId, name: userName } = req.user;
     const session = await openSession(terminal_id, opening_balance, userId, userName);
-    res.status(201).json(session);
+    res.status(201).json({ success: true, data: session });
   } catch (error) {
     next(error);
   }
@@ -21,7 +21,7 @@ const closeSessionController = async (req, res, next) => {
     const { id } = req.params;
     const closing_balance = req.body?.closing_balance ?? 0;
     const result = await closeSession(id, closing_balance);
-    res.json(result);
+    res.json({ success: true, data: result });
   } catch (error) {
     next(error);
   }
@@ -29,8 +29,8 @@ const closeSessionController = async (req, res, next) => {
 
 const listSessionsController = async (req, res, next) => {
   try {
-    const sessions = await listSessions();
-    res.json(sessions);
+    const result = await listSessions(req.query);
+    res.json({ success: true, data: result.sessions, pagination: result.pagination });
   } catch (error) {
     next(error);
   }
@@ -40,7 +40,7 @@ const getSessionController = async (req, res, next) => {
   try {
     const { id } = req.params;
     const session = await getSessionById(id);
-    res.json(session);
+    res.json({ success: true, data: session });
   } catch (error) {
     next(error);
   }

@@ -373,7 +373,16 @@ const PaymentScreen = () => {
               placeholder="0.00"
               disabled={!selectedMethod}
             />
-            {parseFloat(paymentAmount || 0) > remainingAmount && (
+            {/* Cash change display */}
+            {selectedMethod?.type === 'CASH' && parseFloat(paymentAmount || 0) > remainingAmount && (
+              <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                <p className="text-sm font-semibold text-green-800">
+                  💵 Change to return: {formatCurrency(parseFloat(paymentAmount) - remainingAmount)}
+                </p>
+              </div>
+            )}
+            {/* Warn if underpaying with non-cash */}
+            {selectedMethod?.type !== 'CASH' && parseFloat(paymentAmount || 0) > remainingAmount && (
               <p className="text-sm text-amber-600 mt-1">
                 This is more than the due amount
               </p>
@@ -383,7 +392,13 @@ const PaymentScreen = () => {
           {/* Process Payment Button */}
           <Button
             onClick={handlePayment}
-            disabled={!selectedMethod || !paymentAmount || parseFloat(paymentAmount) <= 0 || processingPayment}
+            disabled={
+              !selectedMethod ||
+              !paymentAmount ||
+              parseFloat(paymentAmount) <= 0 ||
+              (selectedMethod?.type === 'CASH' && parseFloat(paymentAmount || 0) < remainingAmount) ||
+              processingPayment
+            }
             loading={processingPayment}
             className="w-full"
           >

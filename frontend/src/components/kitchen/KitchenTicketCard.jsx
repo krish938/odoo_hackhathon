@@ -1,107 +1,201 @@
-import React from 'react';
-import Badge from '../../components/ui/Badge';
-import { formatCurrency, getRelativeTime } from '../../utils/formatCurrency';
-import { Check, Clock, ChefHat } from 'lucide-react';
+import { useState } from 'react';
 
-const KitchenTicketCard = ({ ticket, color, onTicketClick, onItemClick, disabled = false }) => {
-  const getBorderColor = () => {
-    switch (color) {
-      case 'red':
-        return 'border-red-500';
-      case 'amber':
-        return 'border-amber-500';
-      case 'green':
-        return 'border-green-500';
-      default:
-        return 'border-gray-500';
+const STATUS_FLOW = {
+  TO_COOK: { next: 'PREPARING', label: 'Start Cooking', color: '#ef4444', bg: '#1a0505' },
+  PREPARING: { next: 'COMPLETED', label: 'Mark Complete', color: '#f59e0b', bg: '#1a1005' },
+  COMPLETED: { next: null, label: 'Done', color: '#22c55e', bg: '#051a0a' },
+};
+
+const ITEM_STATUS_NEXT = {
+  TO_COOK: 'PREPARING',
+  PREPARING: 'COMPLETED',
+  COMPLETED: null,
+};
+
+const ITEM_STATUS_COLORS = {
+  TO_COOK: { text: '#ef4444', bg: 'rgba(239,68,68,0.15)' },
+  PREPARING: { text: '#f59e0b', bg: 'rgba(245,158,11,0.15)' },
+  COMPLETED: { text: '#22c55e', bg: 'rgba(34,197,94,0.15)' },
+};
+
+const KitchenTicketCard = ({ ticket, onUpdateStatus, onUpdateItemStatus }) => {
+  const [updatingTicket, setUpdatingTicket] = useState(false);
+  const [updatingItems, setUpdatingItems] = useState({});
+
+  const status = ticket.status || 'TO_COOK';
+  const statusCfg = STATUS_FLOW[status] || STATUS_FLOW.TO_COOK;
+
+  const handleTicketStatus = async () => {
+    if (!statusCfg.next || !onUpdateStatus) return;
+    setUpdatingTicket(true);
+    try {
+      await onUpdateStatus(ticket.id, statusCfg.next);
+    } finally {
+      setUpdatingTicket(false);
     }
   };
 
-  const getHeaderColor = () => {
-    switch (color) {
-      case 'red':
-        return 'bg-red-600';
-      case 'amber':
-        return 'bg-amber-600';
-      case 'green':
-        return 'bg-green-600';
-      default:
-        return 'bg-gray-600';
+  const handleItemStatus = async (itemId, currentStatus) => {
+    const next = ITEM_STATUS_NEXT[currentStatus];
+    if (!next || !onUpdateItemStatus) return;
+    setUpdatingItems(prev => ({ ...prev, [itemId]: true }));
+    try {
+      await onUpdateItemStatus(ticket.id, itemId, next);
+    } finally {
+      setUpdatingItems(prev => ({ ...prev, [itemId]: false }));
     }
   };
+
+  const orderNumber = ticket.order_number || ticket.order?.order_number || `T-${ticket.id}`;
+  const tableNumber = ticket.table_number || ticket.order?.table?.table_number || '?';
+  const source = ticket.source || ticket.order?.source || 'POS';
 
   return (
-    <div
-      className={`bg-gray-800 border-2 ${getBorderColor()} rounded-lg overflow-hidden ${!disabled ? 'cursor-pointer hover:opacity-80' : ''}`}
-      onClick={() => !disabled && onTicketClick && onTicketClick()}
-    >
+    <div style={{
+      background: '#1a1a1a',
+      border: `2px solid ${statusCfg.color}`,
+      borderRadius: 16,
+      overflow: 'hidden',
+      boxShadow: `0 4px 20px ${statusCfg.color}25`,
+      transition: 'all 0.3s ease',
+    }}>
       {/* Header */}
-      <div className={`${getHeaderColor()} text-white p-3`}>
-        <div className="flex justify-between items-center">
+      <div style={{
+        background: statusCfg.bg,
+        borderBottom: `1px solid ${statusCfg.color}40`,
+        padding: '14px 18px',
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
-            <h3 className="font-bold text-lg">#{ticket.order?.order_number}</h3>
-            <p className="text-sm opacity-90">Table {ticket.order?.table?.table_number}</p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+              <span style={{ fontWeight: 800, fontSize: 18, color: '#fff' }}>#{orderNumber}</span>
+              {source === 'SELF' && (
+                <span style={{
+                  fontSize: 10, padding: '2px 8px', borderRadius: 10,
+                  background: 'rgba(99,102,241,0.2)', color: '#818cf8',
+                  fontWeight: 700, letterSpacing: '0.05em',
+                }}>SELF-ORDER</span>
+              )}
+            </div>
+            <div style={{ color: '#94a3b8', fontSize: 13 }}>
+              🪑 Table {tableNumber}
+              {ticket.floor_name && <span style={{ color: '#64748b' }}> · {ticket.floor_name}</span>}
+            </div>
           </div>
-          <div className="text-right">
-            <p className="text-xs opacity-75">
-              {getRelativeTime(ticket.created_at)}
-            </p>
-            {ticket.order?.total_amount && (
-              <p className="text-sm font-semibold">
-                {formatCurrency(ticket.order.total_amount)}
-              </p>
-            )}
+          <div style={{
+            textAlign: 'right',
+          }}>
+            <div style={{
+              display: 'inline-block',
+              padding: '3px 10px',
+              borderRadius: 12,
+              background: `${statusCfg.color}25`,
+              color: statusCfg.color,
+              fontSize: 11, fontWeight: 700,
+            }}>
+              {status.replace('_', ' ')}
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Items */}
-      <div className="p-3 space-y-2">
-        {ticket.items?.map((item) => (
-          <div
-            key={item.id}
-            className={`flex items-center justify-between p-2 bg-gray-700 rounded ${!disabled ? 'cursor-pointer hover:bg-gray-600' : ''}`}
-            onClick={(e) => {
-              e.stopPropagation();
-              if (!disabled && onItemClick) onItemClick(item.id);
-            }}
-          >
-            <div className="flex-1">
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={item.status === 'COMPLETED'}
-                  onChange={() => {}}
-                  className="mr-2"
-                  disabled={disabled}
-                />
-                <div>
-                  <p className={`font-medium ${item.status === 'COMPLETED' ? 'line-through text-gray-500' : ''}`}>
-                    {item.quantity}x {item.product?.name}
-                  </p>
-                  {item.product?.attributes && item.product.attributes.length > 0 && (
-                    <p className="text-xs text-gray-400">
-                      {item.product.attributes.map(attr => attr.value).join(', ')}
-                    </p>
-                  )}
+      {/* Items list */}
+      <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {(ticket.items || []).map((item) => {
+          const itemStatus = item.status || 'TO_COOK';
+          const itemColors = ITEM_STATUS_COLORS[itemStatus] || ITEM_STATUS_COLORS.TO_COOK;
+          const canAdvance = ITEM_STATUS_NEXT[itemStatus] !== null;
+
+          return (
+            <div
+              key={item.id}
+              onClick={() => canAdvance && handleItemStatus(item.id, itemStatus)}
+              style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                padding: '10px 14px',
+                borderRadius: 10,
+                background: itemStatus === 'COMPLETED' ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.07)',
+                border: `1px solid ${itemColors.bg}`,
+                cursor: canAdvance ? 'pointer' : 'default',
+                transition: 'all 0.2s',
+                opacity: itemStatus === 'COMPLETED' ? 0.6 : 1,
+              }}
+            >
+              <div style={{ flex: 1 }}>
+                <div style={{
+                  fontWeight: 600, color: '#e2e8f0', fontSize: 14,
+                  textDecoration: itemStatus === 'COMPLETED' ? 'line-through' : 'none',
+                }}>
+                  <span style={{
+                    display: 'inline-block', minWidth: 28, fontWeight: 800,
+                    color: statusCfg.color, marginRight: 4,
+                  }}>×{item.quantity}</span>
+                  {item.product_name || item.product?.name || '—'}
                 </div>
+                {/* Show attribute options */}
+                {item.options && item.options.length > 0 && (
+                  <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
+                    {item.options.map(o => `${o.attribute_name || ''}: ${o.value || ''}`).join(' · ')}
+                  </div>
+                )}
+                {updatingItems[item.id] && (
+                  <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>updating...</div>
+                )}
+              </div>
+              <div style={{
+                padding: '3px 10px', borderRadius: 10,
+                background: itemColors.bg, color: itemColors.text,
+                fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap',
+              }}>
+                {itemStatus.replace('_', ' ')}
               </div>
             </div>
-            <Badge variant={item.status === 'COMPLETED' ? 'success' : item.status === 'PREPARING' ? 'warning' : 'danger'}>
-              {item.status}
-            </Badge>
-          </div>
-        ))}
-      </div>
+          );
+        })}
 
-      {/* Footer */}
-      <div className="bg-gray-900 px-3 py-2 text-xs text-gray-400">
-        {disabled ? (
-          <span className="text-green-400">✓ Completed</span>
-        ) : (
-          <span>Click to {color === 'red' ? 'start preparing' : 'mark complete'}</span>
+        {(!ticket.items || ticket.items.length === 0) && (
+          <div style={{ textAlign: 'center', padding: '16px', color: '#4b5563', fontSize: 13 }}>
+            No items
+          </div>
         )}
       </div>
+
+      {/* Action button */}
+      {statusCfg.next && (
+        <div style={{ padding: '12px 16px', borderTop: '1px solid #2a2a2a' }}>
+          <button
+            onClick={handleTicketStatus}
+            disabled={updatingTicket}
+            style={{
+              width: '100%',
+              padding: '10px',
+              borderRadius: 10,
+              border: 'none',
+              cursor: updatingTicket ? 'wait' : 'pointer',
+              background: `linear-gradient(135deg, ${statusCfg.color}cc, ${statusCfg.color})`,
+              color: '#fff',
+              fontWeight: 700,
+              fontSize: 14,
+              opacity: updatingTicket ? 0.7 : 1,
+              transition: 'all 0.2s',
+            }}
+          >
+            {updatingTicket ? 'Updating...' : statusCfg.label}
+          </button>
+        </div>
+      )}
+
+      {status === 'COMPLETED' && (
+        <div style={{
+          padding: '10px 16px',
+          background: 'rgba(34,197,94,0.08)',
+          borderTop: '1px solid rgba(34,197,94,0.2)',
+          textAlign: 'center',
+          color: '#22c55e', fontSize: 13, fontWeight: 600,
+        }}>
+          ✅ Ready to serve
+        </div>
+      )}
     </div>
   );
 };
