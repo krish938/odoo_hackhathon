@@ -152,6 +152,7 @@ const FloorView = () => {
               <Button
                 variant="ghost"
                 className="text-gray-600"
+                onClick={() => navigate('/backend/dashboard')}
               >
                 <Settings className="h-4 w-4" />
               </Button>
@@ -257,7 +258,7 @@ const FloorView = () => {
       <div className="fixed bottom-4 right-4 bg-white rounded-lg shadow-lg p-4 max-w-sm">
         <h3 className="font-medium text-gray-900 mb-2">Session Info</h3>
         <div className="space-y-1 text-sm text-gray-600">
-          <div>Terminal: {activeSession?.terminal?.name}</div>
+          <div>Terminal: {activeSession?.terminal_name ?? activeSession?.terminal?.name ?? 'N/A'}</div>
           <div>Opened: {getRelativeTime(activeSession?.opened_at)}</div>
           <div>Opening Balance: {formatCurrency(activeSession?.opening_balance || 0)}</div>
           <div>Active Orders: {orders.filter(o => !['PAID', 'COMPLETED'].includes(o.status)).length}</div>
