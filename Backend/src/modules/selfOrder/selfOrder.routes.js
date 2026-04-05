@@ -19,7 +19,7 @@ const router = express.Router();
 router.post(
   '/tokens',
   verifyToken,
-  requireRole(['admin', 'manager']),
+  requireRole(['admin']),
   validate(createTokenSchema),
   createTokenController
 );
@@ -28,7 +28,7 @@ router.post(
 router.delete(
   '/tokens/:token',
   verifyToken,
-  requireRole(['admin', 'manager']),
+  requireRole(['admin']),
   invalidateTokenController
 );
 
@@ -39,3 +39,4 @@ router.get('/menu', validate(getMenuSchema), getMenuController);
 router.post('/orders', validate(createSelfOrderSchema), createSelfOrderController);
 
 module.exports = router;
+

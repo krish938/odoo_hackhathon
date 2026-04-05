@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { connectSocket, disconnectSocket } from '../utils/socket';
 import api from '../api/axios';
+import { QRCodeSVG } from 'qrcode.react';
 
 const STATUS_CONFIG = {
   CREATED: { label: 'Order Received', color: '#3b82f6', icon: '📋', bg: 'rgba(59,130,246,0.1)' },
@@ -152,9 +153,9 @@ export default function CustomerDisplay() {
         </div>
       </div>
 
-      <div style={{ flex: 1, display: 'flex', padding: 32, gap: 32 }}>
-        {/* Order Items Panel */}
-        <div style={{ flex: 2 }}>
+      <div style={{ flex: 1, display: 'flex', padding: 0, gap: 0, overflow: 'hidden' }}>
+        {/* LEFT: Order Items Panel (50%) */}
+        <div style={{ flex: 1, padding: 32, overflowY: 'auto', borderRight: '1px solid rgba(255,255,255,0.08)' }}>
           {!order ? (
             <div style={{
               display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
@@ -225,29 +226,29 @@ export default function CustomerDisplay() {
           )}
         </div>
 
-        {/* Right Panel — Status + Total */}
-        {order && (
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 20 }}>
-            {/* Status Card */}
-            {statusConfig && (
-              <div style={{
-                background: statusConfig.bg,
-                border: `2px solid ${statusConfig.color}`,
-                borderRadius: 16, padding: 28, textAlign: 'center',
-                animation: 'pulse 2s infinite',
-              }}>
-                <div style={{ fontSize: 56, marginBottom: 12 }}>{statusConfig.icon}</div>
-                <h2 style={{ margin: 0, fontSize: 24, color: statusConfig.color, fontWeight: 800 }}>
-                  {statusConfig.label}
-                </h2>
-              </div>
-            )}
+        {/* RIGHT: Status + QR Panel (50%) */}
+        <div style={{ flex: 1, padding: 32, display: 'flex', flexDirection: 'column', gap: 24, alignItems: 'center', justifyContent: 'center' }}>
+          {order && statusConfig && (
+            <div style={{
+              background: statusConfig.bg,
+              border: `2px solid ${statusConfig.color}`,
+              borderRadius: 16, padding: 28, textAlign: 'center',
+              animation: 'pulse 2s infinite',
+              width: '100%', maxWidth: 380,
+            }}>
+              <div style={{ fontSize: 56, marginBottom: 12 }}>{statusConfig.icon}</div>
+              <h2 style={{ margin: 0, fontSize: 24, color: statusConfig.color, fontWeight: 800 }}>
+                {statusConfig.label}
+              </h2>
+            </div>
+          )}
 
-            {/* Bill Summary */}
+          {order && (
             <div style={{
               background: 'rgba(255,255,255,0.05)',
               borderRadius: 16, padding: 24,
               border: '1px solid rgba(255,255,255,0.1)',
+              width: '100%', maxWidth: 380,
             }}>
               <h3 style={{ margin: '0 0 16px', fontSize: 16, fontWeight: 700 }}>Bill Summary</h3>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: 14 }}>
@@ -270,8 +271,39 @@ export default function CustomerDisplay() {
                 </div>
               </div>
             </div>
+          )}
+
+          {/* Persistent QR Code for Self-Order */}
+          <div style={{
+            background: 'rgba(255,255,255,0.05)',
+            borderRadius: 16, padding: 28,
+            border: '1px solid rgba(255,255,255,0.1)',
+            textAlign: 'center',
+            width: '100%', maxWidth: 380,
+          }}>
+            <h3 style={{ margin: '0 0 8px', fontSize: 16, fontWeight: 700, color: '#94a3b8' }}>
+              Scan to Order
+            </h3>
+            <p style={{ margin: '0 0 16px', fontSize: 13, color: '#475569' }}>
+              Use your phone to browse the menu and place your order
+            </p>
+            <div style={{
+              background: '#fff',
+              borderRadius: 12,
+              padding: 16,
+              display: 'inline-block',
+            }}>
+              <QRCodeSVG
+                value={`${window.location.origin}/self-order`}
+                size={180}
+                level="H"
+              />
+            </div>
+            <p style={{ margin: '12px 0 0', fontSize: 11, color: '#475569' }}>
+              {window.location.origin}/self-order
+            </p>
           </div>
-        )}
+        </div>
       </div>
 
       <style>{`

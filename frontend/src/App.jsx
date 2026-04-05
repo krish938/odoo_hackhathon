@@ -18,6 +18,9 @@ import PaymentMethods from '@/pages/backend/PaymentMethods';
 import Floors from '@/pages/backend/Floors';
 import Tables from '@/pages/backend/Tables';
 import Terminals from '@/pages/backend/Terminals';
+import Payments from '@/pages/backend/AdminPayments';
+import Customers from '@/pages/backend/Customers';
+import AdminOrders from '@/pages/backend/AdminOrders';
 import Reports from '@/pages/backend/Reports';
 
 // POS pages
@@ -76,7 +79,7 @@ function App() {
 
           {/* Protected backend routes */}
           <Route path="/backend/*" element={
-            <ProtectedRoute roles={['admin', 'manager']}>
+            <ProtectedRoute roles={['admin']}>
               <AppLayout />
             </ProtectedRoute>
           }>
@@ -89,6 +92,9 @@ function App() {
             <Route path="tables" element={<Tables />} />
             <Route path="terminals" element={<Terminals />} />
             <Route path="reports" element={<Reports />} />
+            <Route path="customers" element={<Customers />} />
+            <Route path="admin-orders" element={<AdminOrders />} />
+            <Route path="admin-payments" element={<Payments />} />
           </Route>
 
           {/* POS routes */}

@@ -42,7 +42,6 @@ const useAuthStore = create(
         
         const roleHierarchy = {
           admin: 3,
-          manager: 2,
           staff: 1,
         };
         
@@ -62,15 +61,6 @@ const useAuthStore = create(
 
         // Define permissions based on role
         const permissions = {
-          manager: [
-            'products.create', 'products.edit', 'products.view',
-            'categories.create', 'categories.edit', 'categories.view',
-            'attributes.create', 'attributes.edit', 'attributes.view',
-            'floors.create', 'floors.edit', 'floors.view',
-            'tables.create', 'tables.edit', 'tables.view',
-            'terminals.create', 'terminals.edit', 'terminals.view',
-            'reports.view', 'sessions.open', 'sessions.close',
-          ],
           staff: [
             'products.view', 'categories.view', 'attributes.view',
             'floors.view', 'tables.view', 'terminals.view',

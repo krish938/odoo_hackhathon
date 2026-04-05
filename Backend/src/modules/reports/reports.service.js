@@ -12,15 +12,15 @@ const getSummaryReport = async (filters = {}) => {
   if (to) { whereClause += ` AND o.created_at <= $${paramIndex++}`; params.push(to); }
   if (session_id) { whereClause += ` AND o.session_id = $${paramIndex++}`; params.push(session_id); }
   if (user_id) { whereClause += ` AND s.user_id = $${paramIndex++}`; params.push(user_id); }
-  if (product_id) { whereClause += ` AND oi.product_id = $${paramIndex++}`; params.push(product_id); }
+  if (product_id) { whereClause += ` AND o.id IN (SELECT order_id FROM order_items WHERE product_id = $${paramIndex++})`; params.push(product_id); }
 
   const [totalOrdersRes, totalRevenueRes, ordersByStatusRes, topProductsRes, revenueByMethodRes, sessionSummaryRes] = await Promise.all([
-    query(`SELECT COUNT(DISTINCT o.id) as total_orders FROM orders o JOIN sessions s ON o.session_id = s.id LEFT JOIN order_items oi ON o.id = oi.order_id ${whereClause}`, params),
-    query(`SELECT COALESCE(SUM(p.amount), 0) as total_revenue FROM payments p JOIN orders o ON p.order_id = o.id JOIN sessions s ON o.session_id = s.id LEFT JOIN order_items oi ON o.id = oi.order_id ${whereClause} AND p.status = 'SUCCESS'`, params),
-    query(`SELECT o.status, COUNT(*) as count FROM orders o JOIN sessions s ON o.session_id = s.id LEFT JOIN order_items oi ON o.id = oi.order_id ${whereClause} GROUP BY o.status`, params),
+    query(`SELECT COUNT(DISTINCT o.id) as total_orders FROM orders o JOIN sessions s ON o.session_id = s.id ${whereClause}`, params),
+    query(`SELECT COALESCE(SUM(p.amount), 0) as total_revenue FROM payments p JOIN orders o ON p.order_id = o.id JOIN sessions s ON o.session_id = s.id ${whereClause} AND p.status = 'SUCCESS'`, params),
+    query(`SELECT o.status, COUNT(*) as count FROM orders o JOIN sessions s ON o.session_id = s.id ${whereClause} GROUP BY o.status`, params),
     query(`SELECT p.id as product_id, p.name, SUM(oi.quantity) as qty_sold, SUM(oi.unit_price * oi.quantity) as revenue FROM order_items oi JOIN products p ON oi.product_id = p.id JOIN orders o ON oi.order_id = o.id JOIN sessions s ON o.session_id = s.id ${whereClause} GROUP BY p.id, p.name ORDER BY qty_sold DESC LIMIT 10`, params),
-    query(`SELECT pm.type, pm.name, COALESCE(SUM(p.amount), 0) as revenue FROM payments p JOIN payment_methods pm ON p.payment_method_id = pm.id JOIN orders o ON p.order_id = o.id JOIN sessions s ON o.session_id = s.id LEFT JOIN order_items oi ON o.id = oi.order_id ${whereClause} AND p.status = 'SUCCESS' GROUP BY pm.type, pm.name`, params),
-    query(`SELECT s.id as session_id, s.responsible_label, COUNT(DISTINCT o.id) as order_count, COALESCE(SUM(p.amount), 0) as total_sales FROM sessions s LEFT JOIN orders o ON s.id = o.session_id LEFT JOIN payments p ON o.id = p.order_id AND p.status = 'SUCCESS' LEFT JOIN order_items oi ON o.id = oi.order_id ${whereClause} GROUP BY s.id, s.responsible_label ORDER BY total_sales DESC`, params),
+    query(`SELECT pm.type, pm.name, COALESCE(SUM(p.amount), 0) as revenue FROM payments p JOIN payment_methods pm ON p.payment_method_id = pm.id JOIN orders o ON p.order_id = o.id JOIN sessions s ON o.session_id = s.id ${whereClause} AND p.status = 'SUCCESS' GROUP BY pm.type, pm.name`, params),
+    query(`SELECT s.id as session_id, s.responsible_label, COUNT(DISTINCT o.id) as order_count, COALESCE(SUM(p.amount), 0) as total_sales FROM sessions s LEFT JOIN orders o ON s.id = o.session_id LEFT JOIN payments p ON o.id = p.order_id AND p.status = 'SUCCESS' ${whereClause} GROUP BY s.id, s.responsible_label ORDER BY total_sales DESC`, params),
   ]);
 
   const ordersByStatus = {};
@@ -63,23 +63,22 @@ const getOrdersReport = async (filters = {}) => {
   if (to) { whereClause += ` AND o.created_at <= $${paramIndex++}`; params.push(to); }
   if (session_id) { whereClause += ` AND o.session_id = $${paramIndex++}`; params.push(session_id); }
   if (user_id) { whereClause += ` AND s.user_id = $${paramIndex++}`; params.push(user_id); }
-  if (product_id) { whereClause += ` AND oi.product_id = $${paramIndex++}`; params.push(product_id); }
+  if (product_id) { whereClause += ` AND o.id IN (SELECT order_id FROM order_items WHERE product_id = $${paramIndex++})`; params.push(product_id); }
 
   const countResult = await query(
-    `SELECT COUNT(DISTINCT o.id) as total FROM orders o JOIN sessions s ON o.session_id = s.id LEFT JOIN order_items oi ON o.id = oi.order_id ${whereClause}`,
+    `SELECT COUNT(DISTINCT o.id) as total FROM orders o JOIN sessions s ON o.session_id = s.id ${whereClause}`,
     params
   );
 
   const ordersResult = await query(
-    `SELECT DISTINCT o.*, s.responsible_label, t.table_number, f.name as floor_name,
-            COUNT(oi.id) as item_count, COALESCE(o.total_amount, 0) as total_amount
+    `SELECT o.*, s.responsible_label, t.table_number, f.name as floor_name,
+            (SELECT COUNT(*) FROM order_items oi WHERE oi.order_id = o.id) as item_count,
+            COALESCE(o.total_amount, 0) as order_total_amount
      FROM orders o
      JOIN sessions s ON o.session_id = s.id
      LEFT JOIN tables t ON o.table_id = t.id
      LEFT JOIN floors f ON t.floor_id = f.id
-     LEFT JOIN order_items oi ON o.id = oi.order_id
      ${whereClause}
-     GROUP BY o.id, s.responsible_label, t.table_number, f.name
      ORDER BY o.created_at DESC
      LIMIT $${paramIndex++} OFFSET $${paramIndex++}`,
     [...params, safeLimit, offset]
@@ -90,7 +89,7 @@ const getOrdersReport = async (filters = {}) => {
     orders: ordersResult.rows.map(row => ({
       ...row,
       item_count: parseInt(row.item_count),
-      total_amount: parseFloat(row.total_amount),
+      total_amount: parseFloat(row.order_total_amount || row.total_amount || 0),
     })),
     pagination: { page: safePage, limit: safeLimit, total, totalPages: Math.ceil(total / safeLimit) },
   };

@@ -17,6 +17,7 @@ const { tablesRouter, tablesByFloorRouter } = require('./modules/tables/tables.r
 const usersRoutes = require('./modules/users/users.routes');
 const terminalsRoutes = require('./modules/terminals/terminals.routes');
 const sessionsRoutes = require('./modules/sessions/sessions.routes');
+const customerRoutes = require('./modules/customers/customers.routes');
 const ordersRoutes = require('./modules/orders/orders.routes');
 const kitchenRoutes = require('./modules/kitchen/kitchen.routes');
 const paymentsRoutes = require('./modules/payments/payments.routes');
@@ -49,7 +50,7 @@ app.use(cors({
 // General rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 200,
+  max: 5000, // Increased for local development testing
   message: { success: false, error: 'Too many requests from this IP, please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
@@ -59,7 +60,7 @@ app.use(limiter);
 // Stricter rate limiting for auth endpoints
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 10,
+  max: 1000, // Increased for local development testing
   message: { success: false, error: 'Too many authentication attempts, please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
@@ -103,6 +104,7 @@ app.use('/api/tables', tablesRouter);
 app.use('/api/users', usersRoutes);
 app.use('/api/terminals', terminalsRoutes);
 app.use('/api/sessions', sessionsRoutes);
+app.use('/api/customers', customerRoutes);
 app.use('/api/orders', ordersRoutes);
 app.use('/api/kitchen', kitchenRoutes);
 app.use('/api/payments', paymentsRoutes);

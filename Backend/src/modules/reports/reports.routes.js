@@ -16,7 +16,7 @@ const router = express.Router();
 
 // All routes require authentication and admin/manager role
 router.use(verifyToken);
-router.use(requireRole(['admin', 'manager']));
+router.use(requireRole(['admin']));
 
 // GET /api/reports/summary
 router.get('/summary', validate(summaryReportSchema), summaryReportController);
@@ -31,3 +31,4 @@ router.get('/export/pdf', exportPDFController);
 router.get('/export/xls', exportXLSController);
 
 module.exports = router;
+

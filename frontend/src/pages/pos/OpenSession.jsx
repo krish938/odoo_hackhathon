@@ -9,13 +9,19 @@ import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import Badge from '../../components/ui/Badge';
 import Spinner from '../../components/ui/Spinner';
-import { Monitor, Play, DollarSign, User } from 'lucide-react';
+import { Monitor, Play, DollarSign, User, LogOut } from 'lucide-react';
 
 const OpenSession = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user } = useAuthStore();
+  const { user, logout } = useAuthStore();
   const { setSession, clearSession } = usePosStore();
+
+  const handleLogout = () => {
+    clearSession();
+    logout();
+    navigate('/login');
+  };
   const [terminals, setTerminals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [openingSession, setOpeningSession] = useState(false);
@@ -63,6 +69,24 @@ const OpenSession = () => {
       setSession(fullSession);
       navigate('/pos/floor');
     } catch (error) {
+      if (error?.response?.status === 409) {
+        try {
+          const sessionsRes = await api.get('/api/sessions?status=OPEN');
+          const sessionsData = sessionsRes.data?.data?.sessions || sessionsRes.data?.data || sessionsRes.data?.sessions || sessionsRes.data || [];
+          const sessions = Array.isArray(sessionsData) ? sessionsData : [];
+          const openSession = sessions.find(s => s.terminal_id === parseInt(formData.terminal_id));
+          if (openSession) {
+            const fullSessionResponse = await api.get(`/api/sessions/${openSession.id}`);
+            const fullSession = fullSessionResponse.data?.data ?? fullSessionResponse.data;
+            clearSession();
+            setSession(fullSession);
+            navigate('/pos/floor');
+            return;
+          }
+        } catch (innerErr) {
+          console.error('Failed to resume existing session:', innerErr);
+        }
+      }
       console.error('Failed to open session:', error);
     } finally {
       setOpeningSession(false);
@@ -74,7 +98,13 @@ const OpenSession = () => {
   }
 
   return (
-    <div className="min-h-screen bg-page-bg flex items-center justify-center py-12 px-4">
+    <div className="min-h-screen bg-page-bg flex items-center justify-center py-12 px-4 relative">
+      <div className="absolute top-4 right-4">
+        <Button variant="ghost" onClick={handleLogout} className="text-gray-600 hover:text-red-600 hover:bg-red-50">
+          <LogOut className="h-5 w-5 mr-2" />
+          Logout
+        </Button>
+      </div>
       <div className="max-w-md w-full">
         <div className="text-center mb-8">
           <div className="mx-auto h-12 w-12 flex items-center justify-center rounded-full bg-primary">
@@ -155,7 +185,7 @@ const OpenSession = () => {
             </div>
 
             {/* Active Sessions Warning */}
-            {user?.role === 'admin' || user?.role === 'manager' ? (
+            {user?.role === 'admin' ? (
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
                 <div className="flex items-center">
                   <div className="flex-shrink-0">

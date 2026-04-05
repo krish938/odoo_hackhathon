@@ -1,6 +1,7 @@
 const {
   createPayment,
   getOrderPayments,
+  listAllPayments,
 } = require('./payments.service');
 
 const createPaymentController = async (req, res, next) => {
@@ -22,7 +23,18 @@ const getOrderPaymentsController = async (req, res, next) => {
   }
 };
 
+const listAllPaymentsController = async (req, res, next) => {
+  try {
+    const filters = req.query;
+    const payments = await listAllPayments(filters);
+    res.json({ success: true, data: payments });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   createPaymentController,
   getOrderPaymentsController,
+  listAllPaymentsController,
 };

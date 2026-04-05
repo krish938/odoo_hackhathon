@@ -7,6 +7,7 @@ import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import Modal from '../../components/ui/Modal';
 import Badge from '../../components/ui/Badge';
+import POSHeader from '../../components/pos/POSHeader';
 import Spinner from '../../components/ui/Spinner';
 import { ArrowLeft, Send, CreditCard, Plus, Minus, Trash2, Search } from 'lucide-react';
 
@@ -31,6 +32,13 @@ const OrderScreen = () => {
       navigate('/pos/open-session');
       return;
     }
+    // Clear local state when entering OrderScreen to prevent cross-table cart contamination
+    clearCart();
+    setActiveOrder(null);
+    setOrder(null);
+    setDiscount(0);
+    setTip(0);
+
     fetchData();
   }, [tableId, activeSession]);
 
@@ -135,12 +143,12 @@ const OrderScreen = () => {
       if (!order) {
         const orderData = {
           session_id: activeSession.id,
-          table_id: parseInt(tableId),
+          table_id: tableId ? parseInt(tableId) : undefined,
           source: 'POS',
         };
         
         const orderRes = await api.post('/api/orders', orderData);
-        order = orderRes.data;
+        order = orderRes.data?.data ?? orderRes.data;
         setActiveOrder(order);
         setOrder(order);
       }
@@ -177,15 +185,14 @@ const OrderScreen = () => {
   };
 
   const handleCharge = async () => {
-    if (cart.length === 0) return;
-    
-    if (activeOrder && activeOrder.status === 'IN_PROGRESS') {
-      // Order already sent to kitchen, go straight to payment
-      navigate(`/pos/payment/${activeOrder.id}`);
-    } else {
-      // Need to create/send first
-      await handleSendToKitchen();
+    // If cart is empty, and order is already sent to kitchen, we navigate.
+    if (cart.length === 0) {
+      if (activeOrder) navigate(`/pos/payment/${activeOrder.id}`);
+      return;
     }
+    
+    // Send to kitchen & charge
+    await handleSendToKitchen();
   };
 
   if (loading) {
@@ -193,33 +200,33 @@ const OrderScreen = () => {
   }
 
   return (
-    <div className="min-h-screen bg-page-bg">
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-6 py-4">
-        <div className="flex items-center justify-between">
+    <div className="min-h-screen bg-page-bg flex flex-col">
+      <POSHeader />
+      <div className="bg-white border-b border-gray-200 px-6 py-2 shadow-sm flex items-center justify-between">
           <div className="flex items-center space-x-4">
             <Button
               variant="ghost"
+              size="sm"
               onClick={() => navigate('/pos/floor')}
             >
-              <ArrowLeft className="h-4 w-4" />
+              <ArrowLeft className="h-4 w-4 mr-1" />
+              Floor
             </Button>
             <div>
-              <h1 className="text-xl font-bold text-gray-900">
-                {table?.table_number || 'Table'} - Order
+              <h1 className="text-lg font-bold text-gray-900">
+                {table?.table_number ? `Table ${table.table_number}` : 'Walk-in Register'}
               </h1>
-              <p className="text-sm text-gray-600">
-                {activeOrder?.order_number || 'New Order'}
-              </p>
             </div>
           </div>
           
           {activeOrder && (
-            <Badge variant={activeOrder.status === 'IN_PROGRESS' ? 'warning' : 'info'}>
-              {activeOrder.status}
-            </Badge>
+            <div className="flex items-center space-x-3">
+              <span className="text-sm font-medium text-gray-600">Order Ref: {activeOrder.order_number}</span>
+              <Badge variant={activeOrder.status === 'IN_PROGRESS' ? 'warning' : 'info'}>
+                {activeOrder.status.replace('_', ' ')}
+              </Badge>
+            </div>
           )}
-        </div>
       </div>
 
       <div className="flex h-screen">

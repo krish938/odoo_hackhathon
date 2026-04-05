@@ -24,7 +24,7 @@ router.get('/', listAttributesController);
 // POST /api/attributes - Create attribute (admin/manager only)
 router.post(
   '/',
-  requireRole(['admin', 'manager']),
+  requireRole(['admin']),
   validate(createAttributeSchema),
   createAttributeController
 );
@@ -32,7 +32,7 @@ router.post(
 // POST /api/attributes/:id/values - Create attribute value (admin/manager only)
 router.post(
   '/:id/values',
-  requireRole(['admin', 'manager']),
+  requireRole(['admin']),
   validate(createAttributeValueSchema),
   createAttributeValueController
 );
@@ -40,9 +40,10 @@ router.post(
 // DELETE /api/attributes/:id/values/:valueId - Delete attribute value (admin/manager only)
 router.delete(
   '/:id/values/:valueId',
-  requireRole(['admin', 'manager']),
+  requireRole(['admin']),
   validate(deleteAttributeValueSchema),
   deleteAttributeValueController
 );
 
 module.exports = router;
+

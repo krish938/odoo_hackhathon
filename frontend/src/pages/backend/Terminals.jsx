@@ -20,7 +20,7 @@ const Terminals = () => {
   const [selectedTerminalQR, setSelectedTerminalQR] = useState(null);
   const [editingTerminal, setEditingTerminal] = useState(null);
   const [deletingTerminal, setDeletingTerminal] = useState(null);
-  const [formData, setFormData] = useState({ name: '' });
+  const [formData, setFormData] = useState({ name: '', upi_id: '' });
 
   useEffect(() => {
     fetchTerminals();
@@ -67,7 +67,8 @@ const Terminals = () => {
   };
 
   const handleOpenSession = (terminal) => {
-    navigate('/pos/open-session', { state: { terminalId: terminal.id } });
+    // Open in new tab as per annotation
+    window.open(`/pos/open-session?terminalId=${terminal.id}`, '_blank');
   };
 
   const openQRModal = (terminal) => {
@@ -76,13 +77,13 @@ const Terminals = () => {
   };
 
   const resetForm = () => {
-    setFormData({ name: '' });
+    setFormData({ name: '', upi_id: '' });
     setEditingTerminal(null);
   };
 
   const openEditModal = (terminal) => {
     setEditingTerminal(terminal);
-    setFormData({ name: terminal.name });
+    setFormData({ name: terminal.name, upi_id: terminal.upi_id || '' });
     setShowModal(true);
   };
 
@@ -211,6 +212,13 @@ const Terminals = () => {
             onChange={(e) => setFormData({ ...formData, name: e.target.value })}
             required
             placeholder="e.g., Main Counter, Bar Counter, Drive-thru"
+          />
+          <Input
+            label="UPI ID"
+            value={formData.upi_id}
+            onChange={(e) => setFormData({ ...formData, upi_id: e.target.value })}
+            placeholder="e.g., 123@ybl.com"
+            helperText="Enter the customized UPI ID to receive payment via UPI on this terminal."
           />
 
           <div className="flex justify-end space-x-3 pt-4">

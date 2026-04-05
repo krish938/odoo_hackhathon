@@ -54,8 +54,33 @@ const Reports = () => {
         if (value) params.append(key, value);
       });
       
-      const response = await api.get(`/api/reports/orders?${params}`);
-      setData(response.data);
+      const [summaryRes, ordersRes] = await Promise.all([
+        api.get(`/api/reports/summary?${params}`),
+        api.get(`/api/reports/orders?${params}`)
+      ]);
+
+      const summaryData = summaryRes.data?.data ?? summaryRes.data;
+      const ordersData = ordersRes.data?.data ?? ordersRes.data;
+
+      const formattedData = {
+        summary: {
+          totalOrders: summaryData.total_orders,
+          totalRevenue: summaryData.total_revenue,
+          averageOrderValue: summaryData.total_orders > 0 ? summaryData.total_revenue / summaryData.total_orders : 0,
+          totalCustomers: ordersData.orders?.filter(o => o.customer_id).length || 0
+        },
+        orders: ordersData.orders || [],
+        topProducts: summaryData.top_products?.map(p => ({
+          name: p.name,
+          quantity: p.qty_sold
+        })) || [],
+        paymentMethods: Object.entries(summaryData.revenue_by_method || {}).map(([name, amount]) => ({
+          name: name.charAt(0).toUpperCase() + name.slice(1),
+          amount
+        }))
+      };
+
+      setData(formattedData);
     } catch (error) {
       console.error('Failed to fetch reports:', error);
     } finally {
@@ -72,7 +97,7 @@ const Reports = () => {
         api.get('/api/users'),
         api.get('/api/products'),
       ]);
-      setSessions(sessionsRes.data?.data?.sessions || sessionsRes.data?.sessions || sessionsRes.data || []);
+      setSessions(sessionsRes.data?.data?.sessions || sessionsRes.data?.data || sessionsRes.data?.sessions || sessionsRes.data || []);
       setUsers(usersRes.data?.data || usersRes.data || []);
       setProducts(productsRes.data?.data || productsRes.data || []);
     } catch (error) {

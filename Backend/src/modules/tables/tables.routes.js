@@ -25,19 +25,19 @@ tablesRouter.get('/', listAllTablesController);
 tablesRouter.get('/:id', validate(getTableSchema), getTableController);
 tablesRouter.post(
   '/',
-  requireRole(['admin', 'manager']),
+  requireRole(['admin']),
   validate(createTableSchema),
   createTableController
 );
 tablesRouter.put(
   '/:id',
-  requireRole(['admin', 'manager']),
+  requireRole(['admin']),
   validate(updateTableSchema),
   updateTableController
 );
 tablesRouter.delete(
   '/:id',
-  requireRole(['admin', 'manager']),
+  requireRole(['admin']),
   validate(deleteTableSchema),
   deleteTableController
 );
@@ -46,3 +46,4 @@ tablesByFloorRouter.use(verifyToken);
 tablesByFloorRouter.get('/', listTablesByFloorController);
 
 module.exports = { tablesRouter, tablesByFloorRouter };
+

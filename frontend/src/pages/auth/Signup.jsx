@@ -43,7 +43,7 @@ const Signup = () => {
       toast.success('Account created successfully!');
       
       // Redirect based on role
-      if (user.role === 'admin' || user.role === 'manager') {
+      if (user.role === 'admin') {
         navigate('/backend/dashboard');
       } else {
         navigate('/pos/open-session');
@@ -112,7 +112,6 @@ const Signup = () => {
               >
                 <option value="">Select a role</option>
                 <option value="staff">Staff</option>
-                <option value="manager">Manager</option>
                 <option value="admin">Admin</option>
               </select>
               {errors.role && (

@@ -33,8 +33,35 @@ const Dashboard = () => {
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      const response = await api.get('/api/reports/summary');
-      setData(response.data?.data ?? response.data);
+      const [summaryRes, ordersRes] = await Promise.all([
+        api.get('/api/reports/summary'),
+        api.get('/api/orders?limit=10')
+      ]);
+      
+      const summary = summaryRes.data?.data ?? summaryRes.data;
+      const recentOrders = ordersRes.data?.data ?? ordersRes.data;
+
+      // Extract revenue mapped to dates, or fallback to an empty format since we don't return daily revenue yet
+      const revenueChart = [
+        { date: 'Today', revenue: summary.total_revenue }
+      ];
+
+      setData({
+        metrics: {
+          totalRevenue: summary.total_revenue,
+          totalOrders: summary.total_orders,
+          averageOrderValue: summary.total_orders > 0 ? summary.total_revenue / summary.total_orders : 0,
+          revenueGrowth: 0, // Placeholder
+          ordersGrowth: 0, // Placeholder
+          activeSessions: summary.session_summary?.length || 0,
+          topProduct: summary.top_products?.[0] ? { name: summary.top_products[0].name, sales: summary.top_products[0].qty_sold } : null,
+          todayOrders: summary.total_orders,
+          todayRevenue: summary.total_revenue,
+          totalCustomers: 0 // Placeholder
+        },
+        recentOrders: Array.isArray(recentOrders) ? recentOrders : (recentOrders?.orders || []),
+        revenueChart
+      });
       setError(null);
     } catch (err) {
       setError('Failed to load dashboard data');

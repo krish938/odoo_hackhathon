@@ -28,7 +28,7 @@ router.get('/:id', validate(getCategorySchema), getCategoryController);
 // POST /api/categories - Create category (admin/manager only)
 router.post(
   '/',
-  requireRole(['admin', 'manager']),
+  requireRole(['admin']),
   validate(createCategorySchema),
   createCategoryController
 );
@@ -36,7 +36,7 @@ router.post(
 // PUT /api/categories/:id - Update category (admin/manager only)
 router.put(
   '/:id',
-  requireRole(['admin', 'manager']),
+  requireRole(['admin']),
   validate(updateCategorySchema),
   updateCategoryController
 );
@@ -44,9 +44,10 @@ router.put(
 // DELETE /api/categories/:id - Delete category (admin/manager only)
 router.delete(
   '/:id',
-  requireRole(['admin', 'manager']),
+  requireRole(['admin']),
   validate(getCategorySchema),
   deleteCategoryController
 );
 
 module.exports = router;
+

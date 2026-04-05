@@ -28,6 +28,8 @@ const SelfOrder = () => {
   const [placingOrder, setPlacingOrder] = useState(false);
   const [orderPlaced, setOrderPlaced] = useState(false);
   const [orderData, setOrderData] = useState(null);
+  const [orderHistory, setOrderHistory] = useState([]);
+  const [showHistory, setShowHistory] = useState(false);
 
   useEffect(() => {
     if (!token) {
@@ -237,8 +239,15 @@ const SelfOrder = () => {
           <p className="text-2xl mb-2">Your order number is</p>
           <p className="text-5xl font-bold mb-6">{orderData?.order_number}</p>
           <p className="text-lg opacity-90 mb-2">Table {table?.table_number}</p>
-          <p className="text-lg opacity-90">Total: {formatCurrency(getCartTotal())}</p>
           <p className="text-lg mt-6 opacity-80">Your order will be prepared shortly</p>
+          <div className="flex flex-col gap-3 mt-8">
+            <button
+              onClick={() => { setOrderPlaced(false); setOrderData(null); }}
+              className="px-8 py-3 bg-white text-green-700 rounded-xl font-bold text-lg hover:bg-green-50 transition"
+            >
+              Place Another Order
+            </button>
+          </div>
         </div>
       </div>
     );

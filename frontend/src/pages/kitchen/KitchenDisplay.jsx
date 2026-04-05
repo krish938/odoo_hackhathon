@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { connectSocket, disconnectSocket, getSocket } from '../../utils/socket';
 import api from '../../api/axios';
+import { useNavigate } from 'react-router-dom';
 import KitchenTicketCard from '../../components/kitchen/KitchenTicketCard';
+import { ArrowLeft } from 'lucide-react';
 
 const STATUS_FILTERS = [
   { value: '', label: 'All Active' },
@@ -11,8 +13,10 @@ const STATUS_FILTERS = [
 ];
 
 export default function KitchenDisplay() {
+  const navigate = useNavigate();
   const [tickets, setTickets] = useState([]);
   const [statusFilter, setStatusFilter] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [connected, setConnected] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(null);
@@ -143,6 +147,22 @@ export default function KitchenDisplay() {
         zIndex: 100,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <button
+            onClick={() => navigate(-1)}
+            style={{
+              padding: '8px',
+              borderRadius: '50%',
+              border: 'none',
+              background: '#2a2a2a',
+              color: '#fff',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+          >
+            <ArrowLeft size={20} />
+          </button>
           <span style={{ fontSize: 28 }}>🍳</span>
           <div>
             <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>Kitchen Display</h1>
@@ -199,6 +219,24 @@ export default function KitchenDisplay() {
               Updated {lastUpdated.toLocaleTimeString()}
             </span>
           )}
+
+          {/* Search bar */}
+          <input
+            type="text"
+            placeholder="Search order # or table..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            style={{
+              padding: '6px 14px',
+              borderRadius: 20,
+              border: '1px solid #374151',
+              background: '#2a2a2a',
+              color: '#fff',
+              fontSize: 13,
+              outline: 'none',
+              width: 200,
+            }}
+          />
         </div>
       </div>
 
@@ -227,7 +265,15 @@ export default function KitchenDisplay() {
             gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
             gap: 20,
           }}>
-            {tickets.map(ticket => {
+            {tickets
+              .filter(ticket => {
+                if (!searchTerm) return true;
+                const s = searchTerm.toLowerCase();
+                const orderNum = (ticket.order_number || '').toLowerCase();
+                const tableNum = String(ticket.table_number || '').toLowerCase();
+                return orderNum.includes(s) || tableNum.includes(s);
+              })
+              .map(ticket => {
               const age = getTicketAge(ticket.created_at || ticket.order_created_at);
               return (
                 <div key={ticket.id} style={{ position: 'relative' }}>

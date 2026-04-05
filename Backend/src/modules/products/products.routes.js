@@ -31,12 +31,13 @@ router.get('/:id', validate(getProductSchema), getProductController);
 router.get('/:id/attributes', validate(getProductSchema), getProductAttributesController);
 
 // POST /api/products - Create product (admin/manager only)
-router.post('/', requireRole(['admin', 'manager']), validate(createProductSchema), createProductController);
+router.post('/', requireRole(['admin']), validate(createProductSchema), createProductController);
 
 // PUT /api/products/:id - Update product (admin/manager only)
-router.put('/:id', requireRole(['admin', 'manager']), validate(updateProductSchema), updateProductController);
+router.put('/:id', requireRole(['admin']), validate(updateProductSchema), updateProductController);
 
 // DELETE /api/products/:id - Soft delete product (admin/manager only)
-router.delete('/:id', requireRole(['admin', 'manager']), validate(getProductSchema), deleteProductController);
+router.delete('/:id', requireRole(['admin']), validate(getProductSchema), deleteProductController);
 
 module.exports = router;
+

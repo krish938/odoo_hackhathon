@@ -2,6 +2,7 @@ const express = require('express');
 const {
   createPaymentController,
   getOrderPaymentsController,
+  listAllPaymentsController,
 } = require('./payments.controller');
 const {
   createPaymentSchema,
@@ -18,7 +19,11 @@ router.use(verifyToken);
 // POST /api/payments - Create payment (all authenticated users)
 router.post('/', validate(createPaymentSchema), createPaymentController);
 
+// GET /api/payments/all - List all payments
+router.get('/all', requireRole(['admin']), listAllPaymentsController);
+
 // GET /api/payments/:orderId - Get payments for an order (all authenticated users)
 router.get('/:orderId', validate(getOrderPaymentsSchema), getOrderPaymentsController);
 
 module.exports = router;
+

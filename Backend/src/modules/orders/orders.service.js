@@ -62,7 +62,7 @@ const addOrderItem = async (orderId, itemData) => {
   const productResult = await query(
     `SELECT p.base_price, p.name, c.send_to_kitchen as category_send_to_kitchen, p.send_to_kitchen
      FROM products p
-     JOIN categories c ON p.category_id = c.id
+     LEFT JOIN categories c ON p.category_id = c.id
      WHERE p.id = $1 AND p.is_active = true`,
     [product_id]
   );
@@ -262,12 +262,16 @@ const getOrderById = async (orderId) => {
             s.responsible_label,
             pt.name as terminal_name,
             t.table_number,
-            f.name as floor_name
+            f.name as floor_name,
+            c.name as customer_name,
+            c.email as customer_email,
+            c.phone as customer_phone
      FROM orders o
      JOIN sessions s ON o.session_id = s.id
      JOIN pos_terminals pt ON s.terminal_id = pt.id
      LEFT JOIN tables t ON o.table_id = t.id
      LEFT JOIN floors f ON t.floor_id = f.id
+     LEFT JOIN customers c ON o.customer_id = c.id
      WHERE o.id = $1`,
     [orderId]
   );
@@ -350,14 +354,16 @@ const listOrders = async (filters = {}) => {
             s.responsible_label,
             t.table_number,
             f.name as floor_name,
+            c.name as customer_name,
             COUNT(oi.id) as item_count
      FROM orders o
      JOIN sessions s ON o.session_id = s.id
      LEFT JOIN tables t ON o.table_id = t.id
      LEFT JOIN floors f ON t.floor_id = f.id
+     LEFT JOIN customers c ON o.customer_id = c.id
      LEFT JOIN order_items oi ON o.id = oi.order_id
      ${whereClause}
-     GROUP BY o.id, s.responsible_label, t.table_number, f.name
+     GROUP BY o.id, s.responsible_label, t.table_number, f.name, c.name
      ORDER BY o.created_at DESC
      LIMIT $${paramIndex++} OFFSET $${paramIndex++}`,
     [...params, safeLimit, offset]
@@ -380,18 +386,31 @@ const sendToKitchen = async (orderId, app) => {
     throw { status: 400, message: 'Order must be in progress to send to kitchen' };
   }
 
-  const existingTicket = await query(
-    'SELECT id FROM kitchen_tickets WHERE order_id = $1',
-    [orderId]
-  );
-
-  if (existingTicket.rows.length > 0) {
-    throw { status: 409, message: 'Kitchen ticket already exists for this order' };
-  }
-
+  // Allow multiple tickets, but only for items not already sent
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+
+    const itemsResult = await client.query(
+      `SELECT oi.id, p.name as product_name, oi.quantity,
+              p.send_to_kitchen, c.send_to_kitchen as category_send_to_kitchen
+       FROM order_items oi
+       JOIN products p ON oi.product_id = p.id
+       LEFT JOIN categories c ON p.category_id = c.id
+       WHERE oi.order_id = $1 AND NOT EXISTS (
+         SELECT 1 FROM kitchen_ticket_items kti WHERE kti.order_item_id = oi.id
+       )`,
+      [orderId]
+    );
+
+    const kitchenItems = itemsResult.rows.filter(
+      item => item.send_to_kitchen || item.category_send_to_kitchen
+    );
+
+    if (kitchenItems.length === 0) {
+      await client.query('ROLLBACK');
+      return { message: 'No new items require kitchen preparation', ticket_id: null };
+    }
 
     const ticketResult = await client.query(
       'INSERT INTO kitchen_tickets (order_id, status) VALUES ($1, $2) RETURNING id',
@@ -400,32 +419,16 @@ const sendToKitchen = async (orderId, app) => {
 
     const ticketId = ticketResult.rows[0].id;
 
-    const itemsResult = await client.query(
-      `SELECT oi.id, p.name as product_name, oi.quantity,
-              p.send_to_kitchen, c.send_to_kitchen as category_send_to_kitchen
-       FROM order_items oi
-       JOIN products p ON oi.product_id = p.id
-       JOIN categories c ON p.category_id = c.id
-       WHERE oi.order_id = $1`,
-      [orderId]
+    const itemParams = [];
+    const itemValues = kitchenItems.map((item, i) => {
+      itemParams.push(ticketId, item.id);
+      return `($${i * 2 + 1}, $${i * 2 + 2})`;
+    });
+
+    await client.query(
+      `INSERT INTO kitchen_ticket_items (ticket_id, order_item_id, status) VALUES ${itemValues.join(', ')}`,
+      itemParams
     );
-
-    const kitchenItems = itemsResult.rows.filter(
-      item => item.send_to_kitchen || item.category_send_to_kitchen
-    );
-
-    if (kitchenItems.length > 0) {
-      const itemParams = [];
-      const itemValues = kitchenItems.map((item, i) => {
-        itemParams.push(ticketId, item.id);
-        return `($${i * 2 + 1}, $${i * 2 + 2})`;
-      });
-
-      await client.query(
-        `INSERT INTO kitchen_ticket_items (ticket_id, order_item_id, status) VALUES ${itemValues.join(', ')}`,
-        itemParams
-      );
-    }
 
     await client.query('COMMIT');
 

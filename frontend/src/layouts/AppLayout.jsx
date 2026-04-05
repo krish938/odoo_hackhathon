@@ -17,7 +17,10 @@ import {
   LogOut, 
   Menu, 
   X,
-  User
+  User,
+  Users,
+  ShoppingCart,
+  Banknote
 } from 'lucide-react';
 
 const AppLayout = () => {
@@ -37,25 +40,25 @@ const AppLayout = () => {
       name: 'Dashboard',
       href: '/backend/dashboard',
       icon: LayoutDashboard,
-      roles: ['admin', 'manager'],
+      roles: ['admin'],
     },
     {
       name: 'Products',
       href: '/backend/products',
       icon: Package,
-      roles: ['admin', 'manager'],
+      roles: ['admin'],
     },
     {
       name: 'Categories',
       href: '/backend/categories',
       icon: Tags,
-      roles: ['admin', 'manager'],
+      roles: ['admin'],
     },
     {
       name: 'Attributes',
       href: '/backend/attributes',
       icon: Palette,
-      roles: ['admin', 'manager'],
+      roles: ['admin'],
     },
     {
       name: 'Payment Methods',
@@ -67,19 +70,37 @@ const AppLayout = () => {
       name: 'Floors & Tables',
       href: '/backend/floors',
       icon: Building,
-      roles: ['admin', 'manager'],
+      roles: ['admin'],
     },
     {
       name: 'Terminals',
       href: '/backend/terminals',
       icon: Monitor,
-      roles: ['admin', 'manager'],
+      roles: ['admin'],
     },
     {
       name: 'Reports',
       href: '/backend/reports',
       icon: BarChart2,
-      roles: ['admin', 'manager'],
+      roles: ['admin'],
+    },
+    {
+      name: 'Customers',
+      href: '/backend/customers',
+      icon: Users,
+      roles: ['admin'],
+    },
+    {
+      name: 'Orders',
+      href: '/backend/admin-orders',
+      icon: ShoppingCart,
+      roles: ['admin'],
+    },
+    {
+      name: 'Payments',
+      href: '/backend/admin-payments',
+      icon: Banknote,
+      roles: ['admin'],
     },
   ];
 
@@ -142,13 +163,25 @@ const AppLayout = () => {
             })}
           </nav>
 
-          {/* Open POS Session Button */}
-          <div className="px-4 pb-4">
+          {/* Utility Displays */}
+          <div className="px-4 pb-4 flex flex-col space-y-2">
+            <Button
+              onClick={() => window.open('/kitchen', '_blank')}
+              className="w-full bg-orange-600 hover:bg-orange-700 text-white"
+            >
+              Open Kitchen Display
+            </Button>
+            <Button
+              onClick={() => window.open('/customer-display', '_blank')}
+              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white"
+            >
+              Customer Screen
+            </Button>
             <Button
               onClick={() => navigate('/pos/open-session')}
-              className="w-full bg-success hover:bg-green-700"
+              className="w-full bg-success hover:bg-green-700 text-white"
             >
-              Open POS Session
+              Sales Screen (POS)
             </Button>
           </div>
 

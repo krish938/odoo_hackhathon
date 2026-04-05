@@ -29,7 +29,7 @@ router.get('/:id', validate(getFloorSchema), getFloorController);
 // POST /api/floors - Create floor (admin/manager only)
 router.post(
   '/',
-  requireRole(['admin', 'manager']),
+  requireRole(['admin']),
   validate(createFloorSchema),
   createFloorController
 );
@@ -37,7 +37,7 @@ router.post(
 // PUT /api/floors/:id - Update floor (admin/manager only)
 router.put(
   '/:id',
-  requireRole(['admin', 'manager']),
+  requireRole(['admin']),
   validate(updateFloorSchema),
   updateFloorController
 );
@@ -45,9 +45,10 @@ router.put(
 // DELETE /api/floors/:id - Delete floor (admin/manager only)
 router.delete(
   '/:id',
-  requireRole(['admin', 'manager']),
+  requireRole(['admin']),
   validate(deleteFloorSchema),
   deleteFloorController
 );
 
 module.exports = router;
+

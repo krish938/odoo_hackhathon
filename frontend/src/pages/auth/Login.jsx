@@ -30,7 +30,7 @@ const Login = () => {
       toast.success('Login successful!');
       
       // Redirect based on role
-      if (user.role === 'admin' || user.role === 'manager') {
+      if (user.role === 'admin') {
         navigate('/backend/dashboard');
       } else {
         navigate('/pos/open-session');

@@ -7,6 +7,7 @@ import { formatCurrency, getRelativeTime } from '../../utils/formatCurrency';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import Spinner from '../../components/ui/Spinner';
+import POSHeader from '../../components/pos/POSHeader';
 import { Coffee, Users, Settings, LogOut, RefreshCw } from 'lucide-react';
 
 const FloorView = () => {
@@ -126,52 +127,7 @@ const FloorView = () => {
 
   return (
     <div className="min-h-screen bg-page-bg">
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <Coffee className="h-8 w-8 text-primary" />
-            <div>
-              <h1 className="text-xl font-bold text-gray-900">Odoo POS Cafe</h1>
-              <p className="text-sm text-gray-600">
-                {activeSession?.terminal_name ?? activeSession?.terminal?.name ?? 'POS Terminal'} • {user?.name}
-              </p>
-            </div>
-          </div>
-          
-          <div className="flex items-center space-x-3">
-            <Button
-              variant="ghost"
-              onClick={fetchData}
-              className="text-gray-600"
-            >
-              <RefreshCw className="h-4 w-4" />
-            </Button>
-            
-            <div className="relative">
-              <Button
-                variant="ghost"
-                className="text-gray-600"
-                onClick={() => navigate('/backend/dashboard')}
-              >
-                <Settings className="h-4 w-4" />
-              </Button>
-            </div>
-            
-            <div className="relative">
-              <Button
-                variant="ghost"
-                onClick={handleCloseSession}
-                loading={closingSession}
-                className="text-gray-600"
-              >
-                <LogOut className="h-4 w-4 mr-2" />
-                Close Register
-              </Button>
-            </div>
-          </div>
-        </div>
-      </div>
+      <POSHeader />
 
       {/* Floor Tabs */}
       <div className="bg-white border-b border-gray-200 px-6">

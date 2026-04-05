@@ -25,9 +25,10 @@ router.get('/:id', validate(getTerminalSchema), getTerminalController);
 // POST /api/terminals - Create terminal (admin/manager only)
 router.post(
   '/',
-  requireRole(['admin', 'manager']),
+  requireRole(['admin']),
   validate(createTerminalSchema),
   createTerminalController
 );
 
 module.exports = router;
+

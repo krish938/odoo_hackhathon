@@ -61,6 +61,9 @@ api.interceptors.response.use(
 
     // Handle 409 Conflict (e.g. duplicate email)
     if (error.response?.status === 409) {
+      if (error.config?.url?.includes('/api/sessions')) {
+        return Promise.reject(error);
+      }
       const msg =
         error.response?.data?.message || error.response?.data?.error;
       toast.error(typeof msg === 'string' ? msg : 'This resource already exists.');

@@ -176,11 +176,13 @@ const PaymentScreen = () => {
   const handlePaymentComplete = async () => {
     // Payment service already marks order PAID when fully paid — no need to call status update
     setShowSuccess(true);
-    setTimeout(() => {
-      clearCart();
-      setShowSuccess(false);
-      navigate('/pos/floor');
-    }, 2000);
+    clearCart();
+    // Click-to-dismiss: user clicks anywhere to go back to floor
+  };
+
+  const handleSuccessDismiss = () => {
+    setShowSuccess(false);
+    navigate('/pos/floor');
   };
 
   const getPaymentIcon = (type) => {
@@ -215,13 +217,17 @@ const PaymentScreen = () => {
 
   if (showSuccess) {
     return (
-      <div className="min-h-screen bg-page-bg flex items-center justify-center">
+      <div
+        className="min-h-screen bg-page-bg flex items-center justify-center cursor-pointer"
+        onClick={handleSuccessDismiss}
+      >
         <div className="text-center">
           <div className="mx-auto h-16 w-16 bg-success rounded-full flex items-center justify-center mb-4">
             <Check className="h-8 w-8 text-white" />
           </div>
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Payment Successful!</h1>
-          <p className="text-gray-600">Redirecting to floor view...</p>
+          <p className="text-gray-600 mb-6">Order {order?.order_number} has been paid.</p>
+          <p className="text-sm text-gray-400 animate-pulse">Click anywhere to continue</p>
         </div>
       </div>
     );

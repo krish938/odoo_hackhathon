@@ -46,7 +46,7 @@ const requireRole = (allowedRoles) => {
       });
     }
 
-    const roleHierarchy = { admin: 3, manager: 2, staff: 1 };
+    const roleHierarchy = { admin: 3, staff: 1 };
     const userRoleLevel = roleHierarchy[req.user.role];
     const requiredLevel = Math.max(...allowedRoles.map(role => roleHierarchy[role]));
 

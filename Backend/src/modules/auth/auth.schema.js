@@ -10,8 +10,8 @@ const signupSchema = z.object({
         if (val === '' || val === null || val === undefined) return 'staff';
         return val;
       },
-      z.enum(['admin', 'manager', 'staff'], {
-        errorMap: () => ({ message: 'Role must be admin, manager, or staff' }),
+      z.enum(['admin', 'staff'], {
+        errorMap: () => ({ message: 'Role must be admin or staff' }),
       })
     ),
   }),

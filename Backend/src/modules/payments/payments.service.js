@@ -99,7 +99,31 @@ const getOrderPayments = async (orderId) => {
   return result.rows;
 };
 
+const listAllPayments = async (filters = {}) => {
+  const { page = 1, limit = 50 } = filters;
+  const safeLimit = Math.min(parseInt(limit) || 50, 200);
+  const safePage = Math.max(parseInt(page) || 1, 1);
+  const offset = (safePage - 1) * safeLimit;
+
+  const result = await query(
+    `SELECT p.*, 
+            pm.name as payment_method_name,
+            pm.type as payment_method_type,
+            o.order_number,
+            c.name as customer_name
+     FROM payments p
+     JOIN payment_methods pm ON p.payment_method_id = pm.id
+     JOIN orders o ON p.order_id = o.id
+     LEFT JOIN customers c ON o.customer_id = c.id
+     ORDER BY p.created_at DESC
+     LIMIT $1 OFFSET $2`,
+    [safeLimit, offset]
+  );
+  return result.rows;
+};
+
 module.exports = {
   createPayment,
   getOrderPayments,
+  listAllPayments,
 };
