@@ -27,7 +27,17 @@ const usePosStore = create(
         set({ activeOrder: order });
         // Load order items into cart
         if (order && order.items) {
-          set({ cart: order.items });
+          const itemsWithTotals = order.items.map(item => {
+            const basePrice = parseFloat(item.base_price) || 0;
+            const unitPrice = parseFloat(item.unit_price) || basePrice;
+            return {
+              ...item,
+              base_price: basePrice,
+              unit_price: unitPrice,
+              subtotal: unitPrice * item.quantity
+            };
+          });
+          set({ cart: itemsWithTotals });
         }
       },
 
@@ -55,18 +65,28 @@ const usePosStore = create(
         if (existingItemIndex >= 0) {
           // Update quantity of existing item
           const updatedCart = [...cart];
-          updatedCart[existingItemIndex].quantity += quantity;
+          const item = updatedCart[existingItemIndex];
+          item.quantity += quantity;
+          item.subtotal = item.unit_price * item.quantity;
           set({ cart: updatedCart });
         } else {
           // Add new item to cart
+          const basePrice = parseFloat(product.base_price) || 0;
+          let unitPrice = basePrice;
+          
+          if (attributes && attributes.length > 0) {
+            const attrTotal = attributes.reduce((sum, attr) => sum + (parseFloat(attr.extra_price) || 0), 0);
+            unitPrice += attrTotal;
+          }
+
           const newItem = {
             product_id: product.id,
             product,
             quantity,
-            base_price: product.base_price,
-            unit_price: product.base_price,
+            base_price: basePrice,
+            unit_price: unitPrice,
             attributes,
-            subtotal: product.base_price * quantity,
+            subtotal: unitPrice * quantity,
           };
           set({ cart: [...cart, newItem] });
         }
@@ -86,16 +106,22 @@ const usePosStore = create(
 
         const { cart } = get();
         const updatedCart = [...cart];
-        updatedCart[index].quantity = quantity;
-        updatedCart[index].subtotal = updatedCart[index].base_price * quantity;
+        const item = updatedCart[index];
+        item.quantity = quantity;
+        
+        const basePrice = parseFloat(item.base_price) || 0;
+        let unitPrice = basePrice;
         
         // Add attribute prices to subtotal
-        if (updatedCart[index].attributes) {
-          const attributeTotal = updatedCart[index].attributes.reduce(
-            (sum, attr) => sum + (attr.extra_price || 0), 0
+        if (item.attributes) {
+          const attributeTotal = item.attributes.reduce(
+            (sum, attr) => sum + (parseFloat(attr.extra_price) || 0), 0
           );
-          updatedCart[index].subtotal += attributeTotal * quantity;
+          unitPrice += attributeTotal;
         }
+        
+        item.unit_price = unitPrice;
+        item.subtotal = unitPrice * quantity;
         
         set({ cart: updatedCart });
       },
@@ -107,14 +133,14 @@ const usePosStore = create(
       // Calculate cart totals
       getCartSubtotal: () => {
         const { cart } = get();
-        return cart.reduce((sum, item) => sum + (item.subtotal || 0), 0);
+        return cart.reduce((sum, item) => sum + (parseFloat(item.subtotal) || 0), 0);
       },
 
       getCartTax: () => {
         const { cart } = get();
         return cart.reduce((sum, item) => {
-          const taxRate = (item.product?.tax || 0) / 100;
-          return sum + (item.subtotal || 0) * taxRate;
+          const taxRate = (parseFloat(item.product?.tax) || 0) / 100;
+          return sum + (parseFloat(item.subtotal) || 0) * taxRate;
         }, 0);
       },
 

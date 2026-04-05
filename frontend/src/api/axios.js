@@ -30,6 +30,10 @@ api.interceptors.response.use(
     return response;
   },
   (error) => {
+    if (error.config?.hideGlobalError) {
+      return Promise.reject(error);
+    }
+
     // Handle 401 Unauthorized - Clear auth and redirect to login
     if (error.response?.status === 401) {
       localStorage.removeItem('pos_token');

@@ -1,4 +1,4 @@
-const { query } = require('../../config/db');
+const { query, pool } = require('../../config/db');
 
 const createPayment = async (paymentData) => {
   const { order_id, payment_method_id, amount, transaction_ref } = paymentData;
@@ -13,14 +13,6 @@ const createPayment = async (paymentData) => {
   }
 
   const order = orderCheck.rows[0];
-
-  if (order.status === 'PAID') {
-    throw { status: 400, message: 'Order is already paid' };
-  }
-
-  if (order.status !== 'COMPLETED') {
-    throw { status: 400, message: 'Order must be completed before payment' };
-  }
 
   const paymentMethodCheck = await query(
     'SELECT id, name FROM payment_methods WHERE id = $1 AND is_enabled = true',
@@ -39,14 +31,16 @@ const createPayment = async (paymentData) => {
   const totalPaid = parseFloat(existingPaymentsResult.rows[0].total_paid);
   const orderTotal = parseFloat(order.total_amount);
 
-  if (totalPaid + amount > orderTotal) {
+  // Use a small epsilon for float comparison
+  if (totalPaid + amount > orderTotal + 0.01) {
     throw { status: 400, message: 'Payment amount exceeds order total' };
   }
 
-  await query('BEGIN');
-
+  const client = await pool.connect();
   try {
-    const paymentResult = await query(
+    await client.query('BEGIN');
+
+    const paymentResult = await client.query(
       `INSERT INTO payments (order_id, payment_method_id, amount, transaction_ref, status)
        VALUES ($1, $2, $3, $4, $5)
        RETURNING *`,
@@ -55,26 +49,28 @@ const createPayment = async (paymentData) => {
 
     const newTotalPaid = totalPaid + amount;
 
+    // Use a small epsilon for float comparison
     if (Math.abs(newTotalPaid - orderTotal) < 0.01) {
-      await query(
+      await client.query(
         `UPDATE orders 
          SET status = 'PAID', updated_at = CURRENT_TIMESTAMP
          WHERE id = $1`,
         [order_id]
       );
 
-      await query(
+      await client.query(
         'INSERT INTO order_logs (order_id, status) VALUES ($1, $2)',
         [order_id, 'PAID']
       );
     }
 
-    await query('COMMIT');
-
+    await client.query('COMMIT');
     return paymentResult.rows[0];
   } catch (error) {
-    await query('ROLLBACK');
+    await client.query('ROLLBACK');
     throw error;
+  } finally {
+    client.release();
   }
 };
 

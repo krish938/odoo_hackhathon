@@ -2,6 +2,10 @@
 INSERT INTO users (name, email, password_hash, role)
 VALUES ('Admin User', 'admin@pos.com', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TiGmiIOgWkssqoOj.hGRRfm5aXK2', 'admin');
 
+-- 500 additional staff/manager users are bulk-seeded via: node Backend/seed_500_users.js
+-- All seeded users use password: Staff@1234 (bcrypt $2b$12 hash)
+-- Roles: ~75% staff, ~25% manager, realistic Indian names
+
 -- Categories
 INSERT INTO categories (name, send_to_kitchen) VALUES
 ('Food', true), ('Beverages', false), ('Desserts', true);

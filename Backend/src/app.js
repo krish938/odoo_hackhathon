@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
+const compression = require('compression');
 const rateLimit = require('express-rate-limit');
 const cookieParser = require('cookie-parser');
 const { env } = require('./config/env');
@@ -32,6 +33,9 @@ const app = express();
 
 // Security middleware
 app.use(helmet());
+
+// Gzip compression for all responses (critical for 3G/slow connections)
+app.use(compression());
 
 // Configure CORS properly
 const allowedOrigins = env.ALLOWED_ORIGINS.split(',').map(o => o.trim());

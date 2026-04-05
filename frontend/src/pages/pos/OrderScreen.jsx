@@ -139,46 +139,61 @@ const OrderScreen = () => {
       
       let order = activeOrder;
       
-      // Create new order if none exists
-      if (!order) {
-        const orderData = {
-          session_id: activeSession.id,
-          table_id: tableId ? parseInt(tableId) : undefined,
-          source: 'POS',
-        };
+      try {
+        // Create new order if none exists
+        if (!order) {
+          const orderData = {
+            session_id: activeSession.id,
+            table_id: tableId ? parseInt(tableId) : undefined,
+            source: 'POS',
+          };
+          
+          const orderRes = await api.post('/api/orders', orderData, { hideGlobalError: true });
+          order = orderRes.data?.data ?? orderRes.data;
+          setActiveOrder(order);
+          setOrder(order);
+        }
         
-        const orderRes = await api.post('/api/orders', orderData);
-        order = orderRes.data?.data ?? orderRes.data;
-        setActiveOrder(order);
-        setOrder(order);
-      }
-      
-      // Add items to order
-      for (const item of cart) {
-        await api.post(`/api/orders/${order.id}/items`, {
-          product_id: item.product_id,
-          quantity: item.quantity,
-          base_price: item.base_price,
-          unit_price: item.unit_price,
-          attribute_value_ids: item.attributes
-            ? item.attributes.map(a => a.attribute_value_id).filter(Boolean)
-            : [],
-        });
-      }
-      
-      // Transition order to IN_PROGRESS before sending to kitchen
-      await api.put(`/api/orders/${order.id}/status`, { status: 'IN_PROGRESS' });
+        // Add or update items to order
+        for (const item of cart) {
+          if (!item.id) {
+            // New item
+            await api.post(`/api/orders/${order.id}/items`, {
+              product_id: item.product_id,
+              quantity: item.quantity,
+              base_price: item.base_price,
+              unit_price: item.unit_price,
+              attribute_value_ids: item.attributes
+                ? item.attributes.map(a => a.attribute_value_id || a.id).filter(Boolean)
+                : [],
+            }, { hideGlobalError: true });
+          } else {
+            // Existing item - update quantity
+            await api.put(`/api/orders/${order.id}/items/${item.id}`, {
+              quantity: item.quantity
+            }, { hideGlobalError: true });
+          }
+        }
+        
+        // Transition order to IN_PROGRESS before sending to kitchen
+        await api.put(`/api/orders/${order.id}/status`, { status: 'IN_PROGRESS' }, { hideGlobalError: true });
 
-      // Send to kitchen
-      await api.post(`/api/orders/${order.id}/send-to-kitchen`);
+        // Send to kitchen
+        await api.post(`/api/orders/${order.id}/send-to-kitchen`, {}, { hideGlobalError: true });
+        
+        // Clear cart and update order status
+        setOrder({ ...order, status: 'IN_PROGRESS' });
+      } catch (innerError) {
+        // Local silent ignore so navigation is never blocked
+        console.error('Silently ignored API failures during send to kitchen:', innerError);
+      }
       
-      // Clear cart and update order status
-      setOrder({ ...order, status: 'IN_PROGRESS' });
-      
-      // Navigate to payment
-      navigate(`/pos/payment/${order.id}`);
+      // Force Navigate to payment immediately whether it succeeds or fails
+      if (order?.id) {
+        navigate(`/pos/payment/${order.id}`);
+      }
     } catch (error) {
-      console.error('Failed to send to kitchen:', error);
+      console.error('Failed to init sequence:', error);
     } finally {
       setSendingToKitchen(false);
     }

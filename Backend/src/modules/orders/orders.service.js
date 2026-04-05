@@ -32,9 +32,7 @@ const createOrder = async (orderData) => {
   const order_number = generateOrderNumber();
 
   const result = await query(
-    `INSERT INTO orders (session_id, table_id, source, order_number)
-     VALUES ($1, $2, $3, $4)
-     RETURNING *`,
+    'INSERT INTO "orders" (session_id, table_id, source, order_number) VALUES ($1, $2, $3, $4) RETURNING *',
     [session_id, table_id || null, source, order_number]
   );
 
@@ -223,6 +221,11 @@ const updateOrderStatus = async (orderId, newStatus) => {
   }
 
   const currentStatus = orderResult.rows[0].status;
+  
+  if (currentStatus === newStatus) {
+    return { message: 'Order status already updated' };
+  }
+
   const validTransitions = {
     'CREATED': ['IN_PROGRESS'],
     'IN_PROGRESS': ['COMPLETED'],
@@ -382,14 +385,25 @@ const sendToKitchen = async (orderId, app) => {
     throw { status: 404, message: 'Order not found' };
   }
 
-  if (orderCheck.rows[0].status !== 'IN_PROGRESS') {
-    throw { status: 400, message: 'Order must be in progress to send to kitchen' };
+  if (!['CREATED', 'IN_PROGRESS'].includes(orderCheck.rows[0].status)) {
+    throw { status: 400, message: 'Order must be created or in progress to send to kitchen' };
   }
 
-  // Allow multiple tickets, but only for items not already sent
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+
+    // Auto-transition to IN_PROGRESS if currently CREATED
+    if (orderCheck.rows[0].status === 'CREATED') {
+      await client.query(
+        'UPDATE orders SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+        ['IN_PROGRESS', orderId]
+      );
+      await client.query(
+        'INSERT INTO order_logs (order_id, status) VALUES ($1, $2)',
+        [orderId, 'IN_PROGRESS']
+      );
+    }
 
     const itemsResult = await client.query(
       `SELECT oi.id, p.name as product_name, oi.quantity,
@@ -403,31 +417,42 @@ const sendToKitchen = async (orderId, app) => {
       [orderId]
     );
 
-    const kitchenItems = itemsResult.rows.filter(
+    const itemsToKitchen = itemsResult.rows.filter(
       item => item.send_to_kitchen || item.category_send_to_kitchen
     );
-
-    if (kitchenItems.length === 0) {
-      await client.query('ROLLBACK');
-      return { message: 'No new items require kitchen preparation', ticket_id: null };
+    
+    if (itemsToKitchen.length === 0) {
+      // Nothing to send to kitchen, just ensure status is updated if needed
+      await client.query(
+        "UPDATE orders SET status = 'IN_PROGRESS', updated_at = CURRENT_TIMESTAMP WHERE id = $1 AND status = 'CREATED'",
+        [orderId]
+      );
+      await client.query('COMMIT');
+      return { message: 'No items to send to kitchen, order status updated' };
     }
 
     const ticketResult = await client.query(
-      'INSERT INTO kitchen_tickets (order_id, status) VALUES ($1, $2) RETURNING id',
-      [orderId, 'TO_COOK']
+      "INSERT INTO kitchen_tickets (order_id, status) VALUES ($1, 'TO_COOK') RETURNING id",
+      [orderId]
     );
-
     const ticketId = ticketResult.rows[0].id;
 
-    const itemParams = [];
-    const itemValues = kitchenItems.map((item, i) => {
-      itemParams.push(ticketId, item.id);
-      return `($${i * 2 + 1}, $${i * 2 + 2})`;
+    const itemValues = [];
+    const itemParams = [ticketId];
+    itemsToKitchen.forEach((item, index) => {
+      itemValues.push(`($1, $${index + 2}, 'TO_COOK')`);
+      itemParams.push(item.id);
     });
 
     await client.query(
       `INSERT INTO kitchen_ticket_items (ticket_id, order_item_id, status) VALUES ${itemValues.join(', ')}`,
       itemParams
+    );
+
+    // Also update order status to IN_PROGRESS if it was CREATED
+    await client.query(
+      "UPDATE orders SET status = 'IN_PROGRESS', updated_at = CURRENT_TIMESTAMP WHERE id = $1 AND status = 'CREATED'",
+      [orderId]
     );
 
     await client.query('COMMIT');
@@ -453,7 +478,7 @@ const sendToKitchen = async (orderId, app) => {
           order_number: orderData.order_number,
           table_number: tableInfo.table_number,
           floor_name: tableInfo.floor_name,
-          items: kitchenItems.map(i => ({ name: i.product_name, quantity: i.quantity })),
+          items: itemsToKitchen.map(i => ({ name: i.product_name, quantity: i.quantity })),
           created_at: new Date().toISOString(),
         });
       }

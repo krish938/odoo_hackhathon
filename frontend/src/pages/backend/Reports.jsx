@@ -94,11 +94,11 @@ const Reports = () => {
     try {
       const [sessionsRes, usersRes, productsRes] = await Promise.all([
         api.get('/api/sessions'),
-        api.get('/api/users'),
+        api.get('/api/users?limit=200'),
         api.get('/api/products'),
       ]);
       setSessions(sessionsRes.data?.data?.sessions || sessionsRes.data?.data || sessionsRes.data?.sessions || sessionsRes.data || []);
-      setUsers(usersRes.data?.data || usersRes.data || []);
+      setUsers(usersRes.data?.users || usersRes.data?.data || usersRes.data || []);
       setProducts(productsRes.data?.data || productsRes.data || []);
     } catch (error) {
       console.error('Failed to fetch filters:', error);
